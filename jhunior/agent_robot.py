@@ -1,98 +1,116 @@
 # agent_robot.py
 import random
 from collections import defaultdict
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-# Orientations and their forward vector
-_ORIENT_VECT = {
+# Direcciones y rotaciones posibles en el espacio 3D.
+_ORIENT_VECT: Dict[str, Tuple[int, int, int]] = {
     '+X': (1, 0, 0), '-X': (-1, 0, 0),
     '+Y': (0, 1, 0), '-Y': (0, -1, 0),
-    '+Z': (0, 0, 1), '-Z': (0, 0, -1),
+    '+Z': (0, 0, 1), '-Z': (0, 0, -1)
 }
 
-# Utility to rotate orientation +/-90 degrees in the 3D grid.
-# We'll define a simple rotation set: rotate around Z for X/Y, around Y for X/Z, etc.
-# For simplicity use a deterministic small rotation table (90° right/left).
-_ROTATE_RIGHT = {
+_ROTATE_RIGHT: Dict[str, str] = {
     '+X': '+Y', '+Y': '-X', '-X': '-Y', '-Y': '+X',
-    '+Z': '+Z', '-Z': '-Z'   # rotating around Z keeps +Z/-Z
+    '+Z': '+Z', '-Z': '-Z'
 }
-_ROTATE_LEFT = {v: k for k, v in _ROTATE_RIGHT.items()}
+_ROTATE_LEFT: Dict[str, str] = {v: k for k, v in _ROTATE_RIGHT.items()}
+
+PerceptionKey = Tuple[bool, bool, bool, bool]  # (energometro, roboscanner, monstroscopio, vacuscopio)
 
 
 class AgenteRobot:
     """
-    Agente Robot con memoria interna, 5 sensores y 3 efectores.
-    Implementa:
-      - perceive(entorno, robots, monstruos)
-      - decide_action(percepcion)
-      - act(action, entorno, robots, monstruos, t)
-      - update_memory(t, percepcion, accion)
+    Agente racional con memoria interna y aprendizaje simbólico por mapeo.
+
+    Implementa cinco sensores (giroscopio, monstroscopio, vacuscopio,
+    energómetro y roboscanner) y tres efectores (propulsor, reorientador, vacuumator).
+    La decisión se sigue según la jerarquía de prioridades P0–P4 definida en el diseño.
     """
 
-    def __init__(self, id, x, y, z, orientation=None):
-        self.id = id
-        self.x, self.y, self.z = int(x), int(y), int(z)
-        self.orientation = orientation if orientation in _ORIENT_VECT else random.choice(list(_ORIENT_VECT.keys()))
-        # Memoria interna
-        self.memory = {
-            'history': [],              # list of (t, perception, action)
-            'known_walls': set(),       # set of (x,y,z) detected by vacuscopio
-            'last_seen_monsters': {},   # monster_id -> (x,y,z,t)
+    def __init__(self, id: int, x: int, y: int, z: int, orientation: Optional[str] = None) -> None:
+        """
+        Inicializa el agente robot.
+
+        Args:
+            id: Identificador único del robot.
+            x, y, z: Coordenadas iniciales en el entorno (enteros).
+            orientation: Orientación inicial ('+X', '-X', '+Y', '-Y', '+Z', '-Z').
+                         Si es None se elige aleatoriamente.
+        """
+        self.id: int = id
+        self.x: int = int(x)
+        self.y: int = int(y)
+        self.z: int = int(z)
+        self.orientation: str = (
+            orientation if orientation in _ORIENT_VECT else random.choice(list(_ORIENT_VECT.keys()))
+        )
+
+        # Memoria interna: historial, conocimiento de paredes y últimas posiciones de monstruos
+        self.memory: Dict[str, Any] = {
+            'history': [],  # list[tuple[int, dict, str]]  (tick, percepcion, accion)
+            'known_walls': set(),  # set[tuple[int,int,int]]
+            'last_seen_monsters': {}  # dict[monster_id, (x,y,z,tick)]
         }
-        # Tabla de mapeo percepción -> acción (simple, puede actualizarse)
-        # keys: tuple(perception flags) -> action
-        # we'll keep a default policy but allow learning updates
-        self.mapping_table = defaultdict(lambda: 'PROPULSOR')  # default explore
-        # initialize some mapping heuristics
-        # (energometro, roboscanner, monstroscopio, vacuscopio_front) -> action
+
+        # Tabla de mapeo percepción -> acción (aprendizaje simbólico simple)
+        self.mapping_table: Dict[PerceptionKey, str] = defaultdict(lambda: 'PROPULSOR')
+        # Inicializaciones heurísticas según el documento
         self.mapping_table[(True, False, False, False)] = 'VACUUMATOR'
         self.mapping_table[(False, True, False, False)] = 'REORIENTADOR'
         self.mapping_table[(False, False, True, False)] = 'PROPULSOR'
-        self.rules_used = set()
 
-    # -----------------------
-    # SENSORES / PERCEPCIONES
-    # -----------------------
-    def perceive(self, entorno, robots, monstruos):
-        """
-        Genera la percepción simulando los 5 sensores descritos:
-         - giroscopio: orientation
-         - monstroscopio: boolean (hay monstruo en las 5 celdas adyacentes excluyendo la posterior)
-         - vacuscopio: boolean (se activará si intentamos mover al frente y hay zona vacía) --> here we provide frontal-check
-         - energometro: boolean (monstruo en la misma celda)
-         - roboscanner: boolean (otro robot en la celda frontal)
-        """
-        giroscopio = self.orientation
+        # Conjunto para depuración/estadísticas de reglas usadas
+        self.rules_used: Set[int] = set()
 
-        # Forward vector
+    # -------------------------------------------------------------------------
+    # SENSORES / PERCEPCIÓN
+    # -------------------------------------------------------------------------
+    def perceive(self, entorno: Any, robots: List[Any], monstruos: List[Any]) -> Dict[str, Any]:
+        """
+        Obtener la percepción actual a partir de los cinco sensores.
+
+        Args:
+            entorno: Instancia de Entorno3D (debe exponer get_cell_type(x,y,z)).
+            robots: Lista de robots presentes en el entorno.
+            monstruos: Lista de monstruos presentes en el entorno.
+
+        Returns:
+            dict: Diccionario con claves:
+                - 'giroscopio' (str): orientación actual.
+                - 'monstroscopio' (bool): monstruo en celdas adyacentes (excepto posterior).
+                - 'vacuscopio' (bool): hay zona vacía/pared en la celda frontal.
+                - 'energometro' (bool): monstruo en la misma celda.
+                - 'roboscanner' (bool): robot en la celda frontal.
+                - 'front_cell' (tuple): coordenadas de la celda frontal.
+        """
+        giroscopio: str = self.orientation
         dx, dy, dz = _ORIENT_VECT[self.orientation]
         front = (self.x + dx, self.y + dy, self.z + dz)
 
-        # Energómetro: check same cell for any monster
-        energometro = any((m.x, m.y, m.z) == (self.x, self.y, self.z) for m in monstruos)
+        # Energómetro: monster in same cell
+        energometro: bool = any((m.x, m.y, m.z) == (self.x, self.y, self.z) for m in monstruos)
 
-        # Roboscanner: is there another robot in the front cell?
-        roboscanner = any((r.x, r.y, r.z) == front and r.id != self.id for r in robots)
+        # Roboscanner: another robot in front cell
+        roboscanner: bool = any((r.x, r.y, r.z) == front and r.id != self.id for r in robots)
 
-        # Vacuscopio frontal check (does front cell exist and is free?)
+        # Vacuscopio: check cell type in front (treat out-of-bounds as vacía)
         cell_front_type = entorno.get_cell_type(*front)
-        vacuscopio = (cell_front_type == 1)  # True if it's a Zona Vacía or outside bounds
+        vacuscopio: bool = (cell_front_type == 1)
 
-        # Monstroscopio: check the 5 adjacent cells excluding the posterior
-        # We'll generate adjacent directions except the one exactly behind.
-        behind_dx, behind_dy, behind_dz = tuple(-v for v in (dx, dy, dz))
-        adj_dirs = [(1,0,0),(-1,0,0),(0,1,0),(0,-1,0),(0,0,1),(0,0,-1)]
-        # exclude behind
-        check_dirs = [d for d in adj_dirs if d != (behind_dx, behind_dy, behind_dz)]
-        monstroscopio = False
-        for ddx, ddy, ddz in check_dirs:
-            nx, ny, nz = self.x + ddx, self.y + ddy, self.z + ddz
-            # if any monster occupies any of these cells, monstroscopio triggers
-            if any((m.x, m.y, m.z) == (nx, ny, nz) for m in monstruos):
-                monstroscopio = True
-                break
+        # Monstroscopio: check neighbor cells except the cell behind
+        behind = (-dx, -dy, -dz)
+        neighbor_dirs = [(1, 0, 0), (-1, 0, 0), (0, 1, 0),
+                         (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+        # Excluir la dirección posterior
+        neighbor_dirs = [d for d in neighbor_dirs if d != behind]
 
-        percepcion = {
+        monstroscopio = any(
+            any((m.x, m.y, m.z) == (self.x + ddx, self.y + ddy, self.z + ddz) for m in monstruos)
+            for ddx, ddy, ddz in neighbor_dirs
+        )
+
+        return {
             'giroscopio': giroscopio,
             'monstroscopio': monstroscopio,
             'vacuscopio': vacuscopio,
@@ -100,154 +118,158 @@ class AgenteRobot:
             'roboscanner': roboscanner,
             'front_cell': front
         }
-        return percepcion
 
-    # -----------------------
-    # DECISION (jerarquía)
-    # -----------------------
-    def decide_action(self, percepcion):
+    # -------------------------------------------------------------------------
+    # DECISIÓN
+    # -------------------------------------------------------------------------
+    def decide_action(self, percepcion: Dict[str, Any]) -> Tuple[str, Optional[str]]:
         """
-        Implementa la jerarquía:
-          P0 Energómetro -> VACUUMATOR (máxima prioridad)
-          P1 Si memoria indica pared en front -> REORIENTADOR
-          P2 Roboscanner -> REORIENTADOR (cooperación simplificada)
-          P3 Monstroscopio -> PROPULSOR (caza informada)
-          P4 Explorar -> PROPULSOR
+        Determinar la acción a ejecutar según la jerarquía de prioridades P0–P4.
+
+        Retorna:
+            (accion, parametro) donde 'accion' es una de:
+              - 'VACUUMATOR', 'REORIENTADOR', 'PROPULSOR', ...
+            y 'parametro' es información adicional (por ejemplo '+90' para giro).
         """
-        # P0
+        # P0: Energómetro → Vacuumator (máxima prioridad)
         if percepcion['energometro']:
             self.rules_used.add(0)
-            return ('VACUUMATOR', None)
+            return 'VACUUMATOR', None
 
-        # P1: check memory-known walls for front cell
-        front = percepcion['front_cell']
-        if front in self.memory['known_walls'] or percepcion['vacuscopio']:
+        # P1: Vacío/pared adelante o memoria indica pared → Reorientador
+        if percepcion['vacuscopio'] or percepcion['front_cell'] in self.memory['known_walls']:
             self.rules_used.add(1)
-            # decide turn direction heuristically: prefer right
-            return ('REORIENTADOR', '+90')
+            return 'REORIENTADOR', '+90'
 
-        # P2
+        # P2: Otro robot en la celda frontal → Reorientador (cooperación simplificada)
         if percepcion['roboscanner']:
             self.rules_used.add(2)
-            return ('REORIENTADOR', '+90')
+            return 'REORIENTADOR', '+90'
 
-        # P3
+        # P3: Monstruo en vecindad → Propulsor
         if percepcion['monstroscopio']:
             self.rules_used.add(3)
-            # try to move forward (propulsor) hoping to find monster
-            return ('PROPULSOR', None)
+            return 'PROPULSOR', None
 
-        # P4 default exploration - consult mapping table (simple learning)
-        # Create perception key for mapping: (energ, robor,monstr, vac_front)
-        key = (percepcion['energometro'], percepcion['roboscanner'],
-               percepcion['monstroscopio'], percepcion['vacuscopio'])
-        mapped = self.mapping_table.get(key, 'PROPULSOR')
+        # P4: Exploración/Política aprendida (mapping_table)
+        key: PerceptionKey = (
+            bool(percepcion['energometro']),
+            bool(percepcion['roboscanner']),
+            bool(percepcion['monstroscopio']),
+            bool(percepcion['vacuscopio'])
+        )
+        accion = self.mapping_table[key]
         self.rules_used.add(4)
-        return (mapped, None)
+        return accion, None
 
-    # -----------------------
-    # EFECTORES / ACCIONES
-    # -----------------------
-    def _propulsor(self, entorno, robots, monstruos):
-        """Avanza una celda en la orientación actual si es posible. Devuelve resultado y event."""
+    # -------------------------------------------------------------------------
+    # EFECTORES
+    # -------------------------------------------------------------------------
+    def _propulsor(self, entorno: Any) -> Dict[str, Any]:
+        """
+        Moverse una celda en la orientación actual si la celda destino es transitable.
+
+        Devuelve un dict con el resultado del intento de movimiento.
+        """
         dx, dy, dz = _ORIENT_VECT[self.orientation]
         nx, ny, nz = self.x + dx, self.y + dy, self.z + dz
         cell_type = entorno.get_cell_type(nx, ny, nz)
-        if cell_type == 0:
-            # Move
-            self.x, self.y, self.z = nx, ny, nz
-            return {'moved': True, 'collision': False}
-        else:
-            # collision with wall (Vacuscopio triggers)
-            self.memory['known_walls'].add((nx, ny, nz))
-            return {'moved': False, 'collision': True, 'wall_coord': (nx, ny, nz)}
 
-    def _reorientador(self, direction='+90'):
-        """Rotate +/-90 degrees (we implement +90 as right, -90 as left)."""
+        if cell_type == 0:
+            # Movimiento exitoso
+            self.x, self.y, self.z = nx, ny, nz
+            return {'moved': True}
+        # Colisión: registrar pared conocida
+        self.memory['known_walls'].add((nx, ny, nz))
+        return {'moved': False, 'collision': True}
+
+    def _reorientador(self, direction: str = '+90') -> Dict[str, Any]:
+        """
+        Reorientar el agente ±90 grados en el plano XY (rotación simplificada).
+
+        Args:
+            direction: '+90' (derecha) o '-90' (izquierda).
+        """
         if direction == '+90':
             self.orientation = _ROTATE_RIGHT.get(self.orientation, self.orientation)
         else:
             self.orientation = _ROTATE_LEFT.get(self.orientation, self.orientation)
         return {'rotated': True, 'new_orientation': self.orientation}
 
-    def _vacuumator(self, entorno, monstruos):
+    def _vacuumator(self, entorno: Any, monstruos: List[Any]) -> Dict[str, Any]:
         """
-        Destroys a monster on the same cell and turns the cell into a Zona Vacía.
-        Following spec, vacuumator also destroys the robot itself (we'll mark robot as 'dead').
-        We will return a dict describing result; caller (simulator) must remove robot and set env cell=1.
+        Efectuar la acción terminal: destruir monstruos en la misma celda y marcar la celda como vacía.
+
+        Nota: el simulador es responsable de eliminar los objetos monstruo de la lista.
         """
-        # find any monster in same cell
-        killed = []
-        for m in list(monstruos):
-            if (m.x, m.y, m.z) == (self.x, self.y, self.z):
-                killed.append(m)
-        # vacuumator effect: environment cell becomes empty (1)
+        killed = [m for m in monstruos if (m.x, m.y, m.z) == (self.x, self.y, self.z)]
+        # Marcar celda como vacía (obstáculo permanente)
         entorno.grid[self.x, self.y, self.z] = 1
-        # robot is destroyed; the simulator should remove it
         return {'killed_monsters': killed, 'robot_destroyed': True, 'cell': (self.x, self.y, self.z)}
 
-    # -----------------------
-    # INTERFAZ: decidir y actuar
-    # -----------------------
-    def decide_and_act(self, t, entorno, robots, monstruos):
+    # -------------------------------------------------------------------------
+    # INTERFAZ: ciclo percepción→decisión→acción
+    # -------------------------------------------------------------------------
+    def decide_and_act(self, t: int, entorno: Any, robots: List[Any], monstruos: List[Any]) -> Dict[str, Any]:
+        """
+        Ejecuta un ciclo completo: percibir, decidir y actuar.
+
+        Args:
+            t: Tick actual de simulación.
+            entorno: Entorno3D.
+            robots: Lista de robots.
+            monstruos: Lista de monstruos.
+
+        Returns:
+            dict: Evento con la acción ejecutada y metadatos (id, tick, resultado).
+        """
         percepcion = self.perceive(entorno, robots, monstruos)
         accion, param = self.decide_action(percepcion)
-
-        # update memory with current perception and tentative action
         self.update_memory(t, percepcion, accion)
 
-        # execute the action and return an event describing what happened
-        event = {'agent_id': self.id, 't': t, 'action': accion, 'param': param}
+        event: Dict[str, Any] = {'agent_id': self.id, 't': t, 'action': accion}
 
         if accion == 'PROPULSOR':
-            res = self._propulsor(entorno, robots, monstruos)
-            event.update(res)
+            event.update(self._propulsor(entorno))
         elif accion == 'REORIENTADOR':
-            res = self._reorientador(direction=param if param else '+90')
-            event.update(res)
+            event.update(self._reorientador(param if param is not None else '+90'))
         elif accion == 'VACUUMATOR':
-            res = self._vacuumator(entorno, monstruos)
-            event.update({'killed_count': len(res['killed_monsters'])})
-            # caller/simulator must remove monsters in res['killed_monsters'] and the robot itself if destroyed
-            event.update(res)
-        else:
-            event.update({'noop': True})
+            event.update(self._vacuumator(entorno, monstruos))
 
         return event
 
-    # -----------------------
-    # MEMORIA / APRENDIZAJE
-    # -----------------------
-    def update_memory(self, t, percepcion, accion):
-        # Append history
-        self.memory['history'].append((t, percepcion.copy(), accion))
-        # If vacuscopio/collision front -> record wall (already done in _propulsor), but double-check:
+    # -------------------------------------------------------------------------
+    # MEMORIA Y APRENDIZAJE
+    # -------------------------------------------------------------------------
+    def update_memory(self, t: int, percepcion: Dict[str, Any], accion: str) -> None:
+        """
+        Registrar percepción y acción en la memoria histórica y actualizar conocimiento local.
+
+        Args:
+            t: Tick actual.
+            percepcion: Diccionario de percepción.
+            accion: Acción ejecutada.
+        """
+        # Append shallow copy of perception to history
+        self.memory['history'].append((t, dict(percepcion), accion))
         if percepcion.get('vacuscopio'):
-            front = percepcion.get('front_cell')
-            if front:
-                self.memory['known_walls'].add(front)
+            self.memory['known_walls'].add(percepcion.get('front_cell'))
 
-    def learn_from_event(self, event, reward=0.0):
+    def learn_from_event(self, event: Dict[str, Any], reward: float = 0.0) -> None:
         """
-        Simple symbolic learning: update mapping_table based on reward.
-        If action produced positive reward, increase chance to repeat action for that perception.
-        We'll keep it simple: map exact perception key -> action if reward > 0
+        Refuerzo simbólico: asociar la última percepción con la acción si reward > 0.
+
+        Args:
+            event: Evento producido por la acción (informal, para trazabilidad).
+            reward: Recompensa (valor >0 refuerza la acción tomada).
         """
-        percep = event.get('percepcion_key')
-        if percep is None:
-            # Try to derive a key from last history element
-            if self.memory['history']:
-                _, p, a = self.memory['history'][-1]
-                key = (p['energometro'], p['roboscanner'], p['monstroscopio'], p['vacuscopio'])
-            else:
-                return
-        else:
-            key = percep
+        if reward <= 0 or not self.memory['history']:
+            return
+        _, p, a = self.memory['history'][-1]
+        key: PerceptionKey = (bool(p['energometro']), bool(p['roboscanner']),
+                              bool(p['monstroscopio']), bool(p['vacuscopio']))
+        self.mapping_table[key] = a
 
-        if reward > 0:
-            # reinforce
-            self.mapping_table[key] = event.get('action', self.mapping_table[key])
-
-    # Nice repr
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Representación concisa del agente para depuración."""
         return f"<AgenteRobot id={self.id} pos=({self.x},{self.y},{self.z}) ori={self.orientation}>"

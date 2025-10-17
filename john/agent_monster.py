@@ -1,153 +1,189 @@
 # agent_monster.py
 import random
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict, Any
+
 
 class AgenteMonstruo:
     """
-    Agente reflejo simple que representa un Monstruo en el entorno 3D.
-    Implementa comportamiento puramente reactivo sin estado interno.
+    Agente reflejo simple que representa un monstruo dentro del entorno 3D.
+
+    Este agente no posee memoria interna ni capacidad de aprendizaje.
+    Su comportamiento es puramente reactivo: se activa de forma periódica
+    y, con cierta probabilidad, se desplaza aleatoriamente hacia una celda
+    válida adyacente.
     """
-    
-    # Direcciones ortogonales posibles en espacio 3D
-    DIRECCIONES = [
-        (1, 0, 0),   # +X
-        (-1, 0, 0),  # -X
-        (0, 1, 0),   # +Y
-        (0, -1, 0),  # -Y
-        (0, 0, 1),   # +Z
-        (0, 0, -1)   # -Z
-    ]
-    
-    def __init__(self, id: int, x: int, y: int, z: int, p_move: float = 0.7):
+
+    # Direcciones ortogonales posibles en el espacio tridimensional
+    _DIRECCIONES: Dict[str, Tuple[int, int, int]] = {
+        '+X': (1, 0, 0), '-X': (-1, 0, 0),
+        '+Y': (0, 1, 0), '-Y': (0, -1, 0),
+        '+Z': (0, 0, 1), '-Z': (0, 0, -1)
+    }
+
+    def __init__(self, id: int, x: int, y: int, z: int, p_move: float = 0.7) -> None:
         """
-        Inicializa el agente monstruo.
-        
+        Inicializa un agente reflejo tipo monstruo.
+
         Args:
-            id: Identificador único del monstruo
-            x, y, z: Posición inicial en el entorno 3D
-            p_move: Probabilidad de moverse cuando se activa (default: 0.7)
+            id: Identificador único del agente.
+            x, y, z: Coordenadas iniciales dentro del entorno.
+            p_move: Probabilidad de moverse cuando se activa (default = 0.7).
         """
-        self.id = id
-        self.x = x
-        self.y = y
-        self.z = z
-        self.p_move = p_move
-        self.acciones_realizadas = 0
-        
-    def percepcion_actual(self, entorno) -> dict:
+        self.id: int = id
+        self.x: int = int(x)
+        self.y: int = int(y)
+        self.z: int = int(z)
+        self.p_move: float = p_move
+        self.acciones_realizadas: int = 0
+
+    # -------------------------------------------------------------------------
+    # PERCEPCIÓN
+    # -------------------------------------------------------------------------
+    def perceive(self, entorno: Any) -> Dict[str, Any]:
         """
-        Simula la percepción mínima del monstruo.
-        Solo percibe si puede moverse a celdas adyacentes.
-        
+        Percibe el entorno inmediato, identificando las celdas vecinas válidas.
+
         Args:
-            entorno: Instancia de Entorno3D para validar movimientos
-            
+            entorno: Instancia del entorno tridimensional (Entorno3D).
+
         Returns:
-            dict: Percepciones disponibles para la toma de decisiones
+            dict: Percepción mínima con las claves:
+                - 'posicion_actual': coordenadas actuales del agente.
+                - 'movimientos_validos': lista de desplazamientos posibles.
+                - 'puede_moverse': indicador booleano de posibilidad de movimiento.
         """
-        percepcion = {
+        movimientos_validos = self._obtener_movimientos_validos(entorno)
+        return {
             'posicion_actual': (self.x, self.y, self.z),
-            'movimientos_validos': self._obtener_movimientos_validos(entorno),
-            'puede_moverse': len(self._obtener_movimientos_validos(entorno)) > 0
+            'movimientos_validos': movimientos_validos,
+            'puede_moverse': bool(movimientos_validos)
         }
-        return percepcion
-    
-    def _obtener_movimientos_validos(self, entorno) -> List[Tuple[int, int, int]]:
+
+    def _obtener_movimientos_validos(self, entorno: Any) -> List[Tuple[int, int, int]]:
         """
-        Obtiene las direcciones de movimiento válidas desde la posición actual.
-        
+        Determina las direcciones hacia celdas transitables del entorno.
+
         Args:
-            entorno: Instancia de Entorno3D para validar celdas
-            
+            entorno: Instancia del entorno 3D.
+
         Returns:
-            List[Tuple]: Lista de direcciones (dx, dy, dz) válidas
+            list[tuple[int, int, int]]: Desplazamientos válidos (dx, dy, dz).
         """
         movimientos_validos = []
-        
-        for dx, dy, dz in self.DIRECCIONES:
-            nueva_x, nueva_y, nueva_z = self.x + dx, self.y + dy, self.z + dz
-            
-            # Validar si el movimiento es posible
-            if self._es_movimiento_valido(entorno, nueva_x, nueva_y, nueva_z):
+        for _, (dx, dy, dz) in self._DIRECCIONES.items():
+            nx, ny, nz = self.x + dx, self.y + dy, self.z + dz
+            if self._es_movimiento_valido(entorno, nx, ny, nz):
                 movimientos_validos.append((dx, dy, dz))
-                
         return movimientos_validos
-    
-    def _es_movimiento_valido(self, entorno, x: int, y: int, z: int) -> bool:
+
+    def _es_movimiento_valido(self, entorno: Any, x: int, y: int, z: int) -> bool:
         """
-        Verifica si un movimiento a la posición (x,y,z) es válido.
-        
+        Verifica si la celda destino está dentro de los límites y es transitable.
+
         Args:
-            entorno: Instancia de Entorno3D
-            x, y, z: Coordenadas destino
-            
+            entorno: Instancia del entorno 3D.
+            x, y, z: Coordenadas destino.
+
         Returns:
-            bool: True si el movimiento es válido
+            bool: True si la celda es válida; False en caso contrario.
         """
-        # Verificar límites del entorno
         if not (0 <= x < entorno.N and 0 <= y < entorno.N and 0 <= z < entorno.N):
             return False
-            
-        # Verificar que no sea Zona Vacía
-        if entorno.grid[x, y, z] == 1:  # 1 = Zona Vacía
-            return False
-            
-        return True
-    
-    def decidir_accion(self, entorno, tick_actual: int, K: int) -> Tuple[str, Optional[Tuple[int, int, int]]]:
+        # Una celda marcada con 1 representa un espacio vacío o bloqueado
+        return entorno.grid[x, y, z] != 1
+
+    # -------------------------------------------------------------------------
+    # DECISIÓN Y ACCIÓN
+    # -------------------------------------------------------------------------
+    def decide_action(
+            self, entorno: Any, tick_actual: int, K: int
+    ) -> Tuple[str, Optional[Tuple[int, int, int]]]:
         """
-        Implementa la lógica de reflejo simple del monstruo.
-        Solo se activa cada K ticks y con probabilidad p_move.
-        
+        Decide la acción a ejecutar según una política reflejo.
+
+        Reglas:
+            - Se activa solo cada K ticks.
+            - Si se activa, se mueve con probabilidad p_move.
+            - Si no hay movimientos válidos, permanece inactivo.
+
         Args:
-            entorno: Instancia de Entorno3D
-            tick_actual: Tick actual de la simulación
-            K: Frecuencia de activación del monstruo
-            
+            entorno: Instancia del entorno 3D.
+            tick_actual: Tick actual de simulación.
+            K: Frecuencia de activación.
+
         Returns:
-            Tuple: (accion, nueva_posicion) 
-                   accion: 'move' o 'idle'
-                   nueva_posicion: None si idle, (x,y,z) si move
+            tuple: ('move' o 'idle', nueva posición si aplica).
         """
-        # Verificar frecuencia de activación (cada K ticks)
+        # Frecuencia de activación
         if tick_actual % K != 0:
             return 'idle', None
-            
-        # Verificar probabilidad de movimiento
+
+        # Probabilidad de movimiento
         if random.random() > self.p_move:
             return 'idle', None
-            
-        # Obtener movimientos válidos
+
+        # Determinar movimientos posibles
         movimientos_validos = self._obtener_movimientos_validos(entorno)
-        
-        # Si no hay movimientos válidos, permanecer idle
         if not movimientos_validos:
             return 'idle', None
-            
-        # Seleccionar movimiento aleatorio (comportamiento reflejo simple)
+
+        # Movimiento aleatorio
         dx, dy, dz = random.choice(movimientos_validos)
-        nueva_x, nueva_y, nueva_z = self.x + dx, self.y + dy, self.z + dz
-        
+        nueva_pos = (self.x + dx, self.y + dy, self.z + dz)
         self.acciones_realizadas += 1
-        return 'move', (nueva_x, nueva_y, nueva_z)
-    
-    def ejecutar_accion(self, accion: str, nueva_posicion: Optional[Tuple[int, int, int]]):
+        return 'move', nueva_pos
+
+    def ejecutar_accion(self, accion: str, nueva_posicion: Optional[Tuple[int, int, int]]) -> None:
         """
-        Ejecuta la acción decidida, actualizando la posición del monstruo.
-        
+        Ejecuta la acción seleccionada, actualizando la posición si corresponde.
+
         Args:
-            accion: 'move' o 'idle'
-            nueva_posicion: Nueva posición si la acción es 'move'
+            accion: Acción ejecutada ('move' o 'idle').
+            nueva_posicion: Coordenadas destino, si aplica.
         """
         if accion == 'move' and nueva_posicion:
             self.x, self.y, self.z = nueva_posicion
-    
-    def obtener_estado_log(self) -> dict:
+
+    # -------------------------------------------------------------------------
+    # INTERFAZ PRINCIPAL (percepción–decisión–acción)
+    # -------------------------------------------------------------------------
+    def decide_and_act(self, t: int, entorno: Any, robots: List[Any],
+                       monstruos: List[Any], K: int) -> Dict[str, Any]:
         """
-        Retorna el estado actual para logging.
-        
+        Ejecuta un ciclo completo de percepción, decisión y acción.
+
+        Args:
+            t: Tick de simulación.
+            entorno: Entorno 3D.
+            robots: Lista de robots (no utilizada).
+            monstruos: Lista de monstruos activos (incluye este agente).
+            K: Frecuencia de activación.
+
         Returns:
-            dict: Estado actual del monstruo
+            dict: Evento con los resultados de la acción.
+        """
+        percepcion = self.perceive(entorno)
+        accion, nueva_pos = self.decide_action(entorno, t, K)
+        self.ejecutar_accion(accion, nueva_pos)
+
+        return {
+            'agent_id': self.id,
+            't': t,
+            'action': accion,
+            'new_pos': (self.x, self.y, self.z),
+            'tipo': 'monster',
+            'moved': accion == 'move'
+        }
+
+    # -------------------------------------------------------------------------
+    # REGISTRO Y REPRESENTACIÓN
+    # -------------------------------------------------------------------------
+    def obtener_estado_log(self) -> Dict[str, Any]:
+        """
+        Devuelve el estado actual del agente para registro o depuración.
+
+        Returns:
+            dict: Datos básicos de identificación y estado.
         """
         return {
             'id': self.id,
@@ -157,11 +193,7 @@ class AgenteMonstruo:
             'tipo': 'monster',
             'acciones_realizadas': self.acciones_realizadas
         }
-    
-    def __str__(self) -> str:
-        """Representación string del monstruo."""
-        return f"Monstruo(id={self.id}, pos=({self.x},{self.y},{self.z}), acciones={self.acciones_realizadas})"
-    
+
     def __repr__(self) -> str:
-        """Representación para debugging."""
-        return self.__str__()
+        """Representación legible para depuración."""
+        return f"<AgenteMonstruo id={self.id} pos=({self.x},{self.y},{self.z}) acciones={self.acciones_realizadas}>"
