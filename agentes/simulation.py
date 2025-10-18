@@ -3,47 +3,49 @@ import random
 import time
 from typing import Tuple
 
-from agentes.agent_monster import AgenteMonstruo
-from agentes.agent_robot import AgenteRobot
-from agentes.environmet import Entorno3D
+from agentes.agent_monster import AgenteReflejoMonstruo
+from agentes.agent_robot import AgenteRacionalRobot
+from agentes.environment import EntornoOperacion
 
 
-class Simulacion:
+class SimulacionEnergetica:
     """
-    Motor principal de simulación de agentes en un entorno tridimensional.
+    Motor principal de simulación dentro del Entorno de Operación Energético.
 
-    Coordina la interacción entre el entorno y los agentes.
-    En cada tick temporal, los agentes (robots y monstruos)
-    ejecutan su ciclo de percepción, decisión y acción.
+    Coordina la interacción entre el Entorno y los agentes energéticos
+    (robots racionales y monstruos reflejo).
+    Cada ciclo temporal representa una transición del sistema energético.
     """
 
     def __init__(
             self,
             N: int = 6,
-            n_robots: int = 2,
-            n_monstruos: int = 2,
+            Nrobots: int = 2,
+            Nmonstruos: int = 2,
             ticks: int = 15,
             K_monstruo: int = 3,
             seed: int | None = None
     ) -> None:
         """
-        Inicializa la simulación configurando el entorno y creando los agentes.
+        Inicializa la simulación configurando el Entorno de Operación
+        y creando las entidades energéticas.
 
         Args:
-            N: Dimensión del entorno cúbico (N×N×N).
-            n_robots: Número de robots iniciales.
-            n_monstruos: Número de monstruos iniciales.
-            ticks: Número total de pasos de simulación.
-            K_monstruo: Frecuencia de activación de los monstruos.
+            N: Tamaño del lado del entorno cúbico (N×N×N).
+            Nrobots: Número de robots racionales.
+            Nmonstruos: Número de monstruos reflejo.
+            ticks: Número total de ciclos de simulación.
+            K_monstruo: Frecuencia de activación de los monstruos reflejo.
             seed: Semilla para reproducibilidad.
         """
         self.N = N
-        self.n_robots = n_robots
-        self.n_monstruos = n_monstruos
+        self.Nrobots = Nrobots
+        self.Nmonstruos = Nmonstruos
         self.ticks = ticks
         self.K_monstruo = K_monstruo
 
-        self.entorno = Entorno3D(N=N, p_vacia=0.2, seed=seed)
+        # Inicializa el entorno de operación energético
+        self.entorno = EntornoOperacion(N=N, Psoft=0.2, Pfree=0.8, seed=seed)
         self._inicializar_agentes()
 
     # -------------------------------------------------------------------------
@@ -51,28 +53,27 @@ class Simulacion:
     # -------------------------------------------------------------------------
     def _inicializar_agentes(self) -> None:
         """
-        Crea y ubica los robots y monstruos en posiciones aleatorias válidas.
+        Crea y posiciona los agentes energéticos (robots y monstruos)
+        en Zonas Libres aleatorias dentro del Entorno de Operación.
         """
-        # Inicialización de robots
-        for i in range(self.n_robots):
+        # Robots racionales
+        for i in range(self.Nrobots):
             while True:
-                x, y, z = self._random_posicion()
-                robot = AgenteRobot(id=i + 1, x=x, y=y, z=z)
+                x, y, z = self._posicion_aleatoria()
+                robot = AgenteRacionalRobot(id=i + 1, x=x, y=y, z=z)
                 if self.entorno.registrar_robot(robot):
                     break
 
-        # Inicialización de monstruos
-        for i in range(self.n_monstruos):
+        # Monstruos reflejo
+        for i in range(self.Nmonstruos):
             while True:
-                x, y, z = self._random_posicion()
-                monstruo = AgenteMonstruo(id=i + 1, x=x, y=y, z=z)
+                x, y, z = self._posicion_aleatoria()
+                monstruo = AgenteReflejoMonstruo(id=i + 1, x=x, y=y, z=z)
                 if self.entorno.registrar_monstruo(monstruo):
                     break
 
-    def _random_posicion(self) -> Tuple[int, int, int]:
-        """
-        Devuelve una posición aleatoria válida dentro de los límites del entorno.
-        """
+    def _posicion_aleatoria(self) -> Tuple[int, int, int]:
+        """Genera una posición aleatoria dentro de los límites del entorno."""
         return (
             random.randint(0, self.N - 1),
             random.randint(0, self.N - 1),
@@ -84,47 +85,53 @@ class Simulacion:
     # -------------------------------------------------------------------------
     def ejecutar(self, delay: float = 0.5) -> None:
         """
-        Ejecuta el bucle principal de la simulación.
+        Ejecuta el ciclo principal de la simulación energética.
 
-        En cada tick:
-            - Los monstruos actúan según su frecuencia K_monstruo.
-            - Los robots perciben, deciden y actúan racionalmente.
-            - Se visualiza una capa intermedia del entorno.
+        En cada ciclo:
+          - Los monstruos reflejo actúan cada K_monstruo ciclos.
+          - Los robots racionales perciben, deciden y actúan.
+          - Se visualiza una capa del Entorno de Operación.
 
         Args:
             delay: Tiempo (segundos) de espera entre ticks.
         """
-        print(f"\n🚀 Iniciando simulación en entorno {self.N}³")
-        print(f"   Robots activos: {len(self.entorno.robots)} | Monstruos activos: {len(self.entorno.monstruos)}\n")
+        print(f"\n⚡ Iniciando Simulación Energética (N={self.N})")
+        print(f"   Robots: {len(self.entorno.robots)} | Monstruos: {len(self.entorno.monstruos)}\n")
 
         for t in range(self.ticks):
-            print(f"\n=== Tick {t} ===")
+            print(f"\n=== Ciclo Energético {t} ===")
 
-            # --- Turno de monstruos ---
+            # --- Monstruos reflejo ---
             for monstruo in list(self.entorno.monstruos):
-                evento = monstruo.decide_and_act(
-                    t, self.entorno, self.entorno.robots, self.entorno.monstruos, self.K_monstruo
+                evento = monstruo.percibir_decidir_actuar(
+                    t, self.entorno, self.K_monstruo
                 )
-                if evento["moved"]:
-                    print(f"👾 Monstruo {monstruo.id} → {evento['action']} hacia {evento['new_pos']}")
 
-            # --- Turno de robots ---
+                if evento.get("se_movio", False):
+                    print(f"👾 Monstruo {monstruo.id} → {evento['accion']} hacia {evento['nueva_pos']}")
+                else:
+                    print(f"👾 Monstruo {monstruo.id} permanece inactivo en {evento['nueva_pos']}")
+
+            # --- Robots racionales ---
             for robot in list(self.entorno.robots):
-                evento = robot.decide_and_act(t, self.entorno, self.entorno.robots, self.entorno.monstruos)
-                print(f"🤖 Robot {robot.id} → {evento['action']} (orientación: {robot.orientation})")
+                evento = robot.percibir_decidir_actuar(
+                    t, self.entorno, self.entorno.robots, self.entorno.monstruos
+                )
+                accion = evento.get("accion", "?")
+                print(f"🤖 Robot {robot.id} → {accion} (orientación: {robot.orientacion})")
 
-            # --- Visualización parcial ---
+            # --- Visualización del entorno energético ---
             self.entorno.visualizar_capa(self.N // 2)
             time.sleep(delay)
 
-        print("\n✅ Simulación finalizada.")
+        print("\n✅ Simulación Energética finalizada.")
 
     # -------------------------------------------------------------------------
     # REPRESENTACIÓN
     # -------------------------------------------------------------------------
     def __repr__(self) -> str:
-        """Representación textual de la simulación actual."""
+        """Representación textual de la simulación energética."""
         return (
-            f"<Simulacion N={self.N}, robots={len(self.entorno.robots)}, "
-            f"monstruos={len(self.entorno.monstruos)}, ticks={self.ticks}>"
+            f"<SimulacionEnergetica N={self.N}, Robots={len(self.entorno.robots)}, "
+            f"Monstruos={len(self.entorno.monstruos)}, Ticks={self.ticks}>"
         )
