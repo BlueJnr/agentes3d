@@ -1,0 +1,5 @@
+# Dependencias principales del proyecto
+numpy>=1.24.0
+
+# Nota:
+# Las librerías 'random', 'time' y 'typing' son parte de la librería estándar de Python.

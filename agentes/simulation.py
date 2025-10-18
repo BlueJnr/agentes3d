@@ -3,9 +3,9 @@ import random
 import time
 from typing import Tuple
 
-from agent_monster import AgenteMonstruo
-from jhunior.agent_robot import AgenteRobot
-from john.environmet import Entorno3D
+from agentes.agent_monster import AgenteMonstruo
+from agentes.agent_robot import AgenteRobot
+from agentes.environmet import Entorno3D
 
 
 class Simulacion:
@@ -128,8 +128,3 @@ class Simulacion:
             f"<Simulacion N={self.N}, robots={len(self.entorno.robots)}, "
             f"monstruos={len(self.entorno.monstruos)}, ticks={self.ticks}>"
         )
-
-
-if __name__ == "__main__":
-    sim = Simulacion(N=6, n_robots=2, n_monstruos=2, ticks=10, K_monstruo=3, seed=42)
-    sim.ejecutar(delay=0.2)

@@ -1,0 +1,77 @@
+# ============================================
+# Python
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm
+.idea/
+*.iml
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+*.swp
+*.DS_Store
+
+# Local configuration
+*.env
+.env.*
+config.local.*
+settings.local.*
+
+# Profiling data
+.prof
+*.pid
+
+# ============================================
+# Custom project folders
+# ============================================
+# Ignore simulation results or runtime data if any
+results/
+output/
+data/
