@@ -6,6 +6,7 @@ from typing import Tuple
 from agentes.agent_monster import AgenteReflejoMonstruo
 from agentes.agent_robot import AgenteRacionalRobot
 from agentes.environment import EntornoOperacion
+from agentes.visual_3d_manual import Visualizador3DManual
 
 
 class SimulacionEnergetica:
@@ -27,13 +28,13 @@ class SimulacionEnergetica:
     """
 
     def __init__(
-        self,
-        N: int = 6,
-        Nrobots: int = 2,
-        Nmonstruos: int = 2,
-        ticks: int = 15,
-        K_monstruo: int = 3,
-        seed: int | None = None
+            self,
+            N: int = 6,
+            Nrobots: int = 2,
+            Nmonstruos: int = 2,
+            ticks: int = 15,
+            K_monstruo: int = 3,
+            seed: int | None = None
     ) -> None:
         """
         Inicializa la simulación configurando el **Entorno de Operación Energético**
@@ -97,6 +98,16 @@ class SimulacionEnergetica:
             random.randint(0, self.N - 1),
             random.randint(0, self.N - 1)
         )
+
+    def ejecutar_manual_3d(self):
+        """
+        Ejecuta la simulación en modo 3D manual:
+        - El usuario controla cuándo avanza cada tick.
+        - Se muestra un cubo transparente en OpenGL.
+        """
+        print("🧊 Iniciando simulación 3D manual...")
+        vis = Visualizador3DManual(self)
+        vis.iniciar()
 
     # -------------------------------------------------------------------------
     # MOTOR DE SIMULACIÓN

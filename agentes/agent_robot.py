@@ -184,6 +184,7 @@ class AgenteRacionalRobot:
         # 2. Colisión previa (Vacuscopio) → girar
         if p['vacuscopio']:
             self.reglas_usadas.add(1)
+            self.memoria['vacuscopio_activado'] = False
             return {"accion": "REORIENTADOR", "param": "+90", "razon": "obstaculo_detectado"}
 
         # 3. Robot al frente → decisión cooperativa
@@ -395,23 +396,6 @@ class AgenteRacionalRobot:
         self.memoria['historial'].append((t, dict(percepcion), accion, (self.x, self.y, self.z)))
         if percepcion['percepcion'].get('vacuscopio'):
             self.memoria['paredes_conocidas'].add(percepcion['percepcion'].get('celda_frontal'))
-
-    def aprender_de_evento(self, evento: Dict[str, Any], recompensa: float = 0.0) -> None:
-        """
-        Aprendizaje simbólico basado en refuerzo.
-
-        Reasigna la acción de una combinación percepción–estado si el evento
-        resultó exitoso y obtuvo recompensa positiva.
-
-        Args:
-            evento (Dict[str, Any]): Resultado del último ciclo.
-            recompensa (float): Valor de refuerzo (positiva si fue exitosa).
-        """
-        if recompensa <= 0 or not self.memoria['historial']:
-            return
-        _, p, a, _ = self.memoria['historial'][-1]
-        clave: PercepcionClave = (p['energometro'], p['roboscanner'], bool(p['monstroscopio']), p['vacuscopio'])
-        self.tabla_mapeo[clave] = a
 
     def __repr__(self) -> str:
         """Representación textual simplificada del robot para depuración."""

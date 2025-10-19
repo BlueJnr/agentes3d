@@ -36,4 +36,6 @@ if __name__ == "__main__":
     )
 
     # Ejecución del motor energético con retardo de visualización
-    simulacion.ejecutar(delay=0.2)
+    #simulacion.ejecutar(delay=0.2)
+    # Ejecutar modo 3D manual
+    simulacion.ejecutar_manual_3d()

@@ -1,6 +1,7 @@
 # environment.py
 import random
 from typing import List, Any, Optional
+
 import numpy as np
 
 
@@ -28,11 +29,11 @@ class EntornoOperacion:
     ZONA_VACIA = 1
 
     def __init__(
-        self,
-        N: int = 5,
-        Pfree: float = 0.8,
-        Psoft: float = 0.2,
-        seed: Optional[int] = None
+            self,
+            N: int = 5,
+            Pfree: float = 0.8,
+            Psoft: float = 0.2,
+            seed: Optional[int] = None
     ) -> None:
         """
         Inicializa el entorno energético tridimensional (N×N×N).
@@ -82,14 +83,13 @@ class EntornoOperacion:
         for x in range(self.N):
             for y in range(self.N):
                 for z in range(self.N):
-                    # Borde exterior → siempre Zona Vacía
-                    if x in (0, self.N - 1) or y in (0, self.N - 1) or z in (0, self.N - 1):
-                        self.grid[x, y, z] = self.ZONA_VACIA
-                    else:
-                        # Zonas internas → asignación probabilística
-                        self.grid[x, y, z] = (
-                            self.ZONA_VACIA if random.random() < self.Psoft else self.ZONA_LIBRE
-                        )
+                    self.grid[x, y, z] = (
+                        self.ZONA_VACIA if random.random() < self.Psoft else self.ZONA_LIBRE
+                    )
+
+        # Asegurar un punto visible libre (centro)
+        centro = self.N // 2
+        self.grid[centro, centro, centro] = self.ZONA_LIBRE
 
         total_vacias = int(np.sum(self.grid == self.ZONA_VACIA))
         porcentaje = total_vacias / (self.N ** 3)
