@@ -266,19 +266,24 @@ class Visualizador3DManual:
     # Tick manual
     # ------------------------------------------------------------------
     def _tick(self):
-        print(f"\n=== Tick manual {self.tick_actual} ===")
+        print(f"\n{'='*60}")
+        print(f"⚙️  [Tick {self.tick_actual}] Manual simulation step started")
+        print(f"{'='*60}")
 
-        # Monstruos reflejo
+        # ---- Monstruos reflejo ----
+        print("\n🧠 MONSTRUOS REFLEJO:")
         for monstruo in list(self.simulacion.entorno.monstruos):
             evento = monstruo.percibir_decidir_actuar(
                 self.tick_actual, self.simulacion.entorno, self.simulacion.K_monstruo
             )
             if evento["exito"]:
-                print(f"👾 Monstruo {monstruo.id} → {evento['accion']} → {evento['resultado']['nueva_pos']}")
+                print(
+                    f"  👾 [Monstruo {monstruo.id}] Acción: {evento['accion']:<12} → Nueva pos: ({monstruo.x}, {monstruo.y}, {monstruo.z})")
             else:
-                print(f"👾 Monstruo {monstruo.id} inactivo.")
+                print(f"  💤 [Monstruo {monstruo.id}] Inactivo → {evento.get('razon', 'sin movimiento')}")
 
-        # Robots racionales
+        # ---- Robots racionales ----
+        print("\n🤖 ROBOTS RACIONALES:")
         for robot in list(self.simulacion.entorno.robots):
             evento = robot.percibir_decidir_actuar(
                 self.tick_actual,
@@ -286,10 +291,31 @@ class Visualizador3DManual:
                 self.simulacion.entorno.robots,
                 self.simulacion.entorno.monstruos,
             )
-            print(f"🤖 Robot {robot.id} → {evento['accion']} ({evento['razon']})")
 
+            razon = evento.get("razon", "sin motivo")
+            exito = "✅" if evento.get("exito", False) else "❌"
+            print(f"  🤖 [Robot {robot.id}] Acción: {evento['accion']:<12} → {exito} | Regla: {razon}")
+            print(f"     📍 Posición actual: ({robot.x}, {robot.y}, {robot.z})")
+
+            # 📜 Historial de acciones
+            if hasattr(robot, "memoria") and "historial" in robot.memoria:
+                historial = robot.memoria["historial"]
+                if historial:
+                    print("     🧾 Últimos pasos registrados:")
+                    for t, percepcion, accion_hist in historial[-100:]:  # mostrar últimos 5
+                        # Extraer celda frontal si existe en la percepción
+                        celda_frontal = percepcion.get("celda_frontal")
+                        celda_str = f" → celda_frontal={celda_frontal}" if celda_frontal else ""
+                        print(f"        • Tick {t:>2}: {accion_hist:<10}{celda_str}")
+                else:
+                    print("     🧾 Historial vacío.")
+            else:
+                print("     ⚠️  Robot sin memoria registrada.")
+
+            # Evento especial: Vacuumator
             if evento["accion"] == "VACUUMATOR" and evento["exito"]:
-                print(f"💥 Robot {robot.id} destruido por Vacuumator.")
+                print(f"     ⚠️  [Robot {robot.id}] se autodestruye con Vacuumator (celda transformada).")
                 self.simulacion.entorno.eliminar_robot(robot.id)
 
+        print(f"\n✅ [Tick {self.tick_actual}] Finalizado correctamente.\n")
         self.tick_actual += 1

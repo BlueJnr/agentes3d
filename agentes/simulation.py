@@ -126,44 +126,61 @@ class SimulacionEnergetica:
         Args:
             delay (float): Tiempo (en segundos) de pausa entre ciclos energéticos.
         """
-        print(f"\n⚡ Iniciando Simulación Energética (N={self.N})")
-        print(f"   Robots: {len(self.entorno.robots)} | Monstruos: {len(self.entorno.monstruos)}\n")
+        print(f"\n{'=' * 70}")
+        print(f"⚡ INICIO DE SIMULACIÓN ENERGÉTICA 3D")
+        print(f"{'-' * 70}")
+        print(f"📦 Tamaño del entorno: {self.N}x{self.N}x{self.N}")
+        print(f"🤖 Robots: {len(self.entorno.robots)} | 👾 Monstruos: {len(self.entorno.monstruos)}")
+        print(f"🔁 Ciclos configurados: {self.ticks} | Frecuencia monstruo K={self.K_monstruo}")
+        print(f"{'=' * 70}\n")
 
         for t in range(self.ticks):
-            print(f"\n=== Ciclo Energético {t} ===")
+            print(f"\n{'-' * 60}")
+            print(f"⚙️  [Ciclo Energético {t}]")
+            print(f"{'-' * 60}")
 
             # --- Activación de los agentes energéticos (monstruos reflejo) ---
+            print("👾 MONSTRUOS REFLEJO:")
             for monstruo in list(self.entorno.monstruos):
                 evento = monstruo.percibir_decidir_actuar(t, self.entorno, self.K_monstruo)
-                accion = evento.get("accion")
+                accion = evento.get("accion", "N/A")
                 exito = evento.get("exito", False)
-                resultado = evento.get("resultado", {})
+                razon = evento.get("razon", "")
 
                 if exito:
-                    print(f"👾 Monstruo {monstruo.id} → {accion} a {resultado.get('nueva_pos')}")
+                    print(
+                        f"  ✅ [Monstruo {monstruo.id}] Acción: {accion:<10} → Nueva posición: ({monstruo.x}, {monstruo.y}, {monstruo.z})")
                 else:
-                    print(f"👾 Monstruo {monstruo.id} → inactivo en {resultado.get('nueva_pos')}")
+                    print(f"  💤 [Monstruo {monstruo.id}] Inactivo → {razon}")
 
             # --- Activación de los agentes materiales (robots racionales) ---
+            print("\n🤖 ROBOTS RACIONALES:")
             for robot in list(self.entorno.robots):
                 evento = robot.percibir_decidir_actuar(t, self.entorno, self.entorno.robots, self.entorno.monstruos)
                 accion = evento.get("accion", "?")
                 exito = evento.get("exito", False)
-                razon = evento.get("razon", "")
+                razon = evento.get("razon", "sin motivo")
+                orient = getattr(robot, "orientacion", "?")
 
-                print(f"🤖 Robot {robot.id} → {accion} (orientación: {robot.orientacion}) → {razon}")
+                estado = "✅ Éxito" if exito else "⚠️ Fallo"
+                print(f"  🤖 [Robot {robot.id}] {accion:<12} | {estado:<10} | Regla: {razon:<35} | Ori: {orient}")
 
-                # Autodestrucción por uso del Vacuumator (según especificación)
+                # Autodestrucción por uso del Vacuumator
                 if accion == "VACUUMATOR" and exito:
-                    print(f"💥 Robot {robot.id} fue destruido al usar el Vacuumator con éxito.")
+                    print(f"     💥 [Robot {robot.id}] se autodestruye tras activar Vacuumator.")
                     self.entorno.eliminar_robot(robot.id)
-                    break  # detener iteración; la lista cambió
+                    break  # salir del loop para evitar iterar sobre lista modificada
 
-            # --- Visualización del entorno en una capa central ---
+            # --- Visualización del entorno en capa central ---
+            print(f"\n🧩 Visualizando capa central (z={self.N // 2}) del entorno...")
             self.entorno.visualizar_capa(self.N // 2)
+
+            print(f"✅ [Ciclo {t}] completado.\n")
             time.sleep(delay)
 
-        print("\n✅ Simulación Energética finalizada.")
+        print(f"\n{'=' * 70}")
+        print("🏁 SIMULACIÓN ENERGÉTICA FINALIZADA CON ÉXITO.")
+        print(f"{'=' * 70}\n")
 
     # -------------------------------------------------------------------------
     # REPRESENTACIÓN

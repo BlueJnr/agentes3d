@@ -68,7 +68,7 @@ class AgenteRacionalRobot:
 
         # Memoria interna del agente racional
         self.memoria: Dict[str, Any] = {
-            'historial': [],             # [(t, percepcion, accion, posicion)]
+            'historial': [],  # [(t, percepcion, accion, posicion)]
             'paredes_conocidas': set(),  # Celdas donde el Vacuscopio se activó
             'vacuscopio_activado': False,
             'posicion_anterior': (x, y, z)
@@ -109,20 +109,13 @@ class AgenteRacionalRobot:
         dx, dy, dz = _DIRECCIONES[self.orientacion]
         frente = (self.x + dx, self.y + dy, self.z + dz)
 
-        percepcion_especifica = {
+        return {
             'giroscopio': self.orientacion,
             'energometro': any((m.x, m.y, m.z) == (self.x, self.y, self.z) for m in monstruos),
             'roboscanner': any((r.x, r.y, r.z) == frente and r.id != self.id for r in robots),
             'vacuscopio': self.memoria.get('vacuscopio_activado', False),
             'monstroscopio': self._detectar_monstruos(monstruos, dx, dy, dz),
-            'celda_frontal': frente
-        }
-
-        return {
-            'id': self.id,
-            'tipo': 'robot',
-            'posicion': (self.x, self.y, self.z),
-            'percepcion': percepcion_especifica
+            'posicion_anterior': self.memoria.get('posicion_anterior')
         }
 
     def _detectar_monstruos(self, monstruos: List[Any], dx: int, dy: int, dz: int) -> Optional[str]:
@@ -174,48 +167,77 @@ class AgenteRacionalRobot:
                 - `'param'`: dirección o ángulo si aplica.
                 - `'razon'`: justificación textual.
         """
-        p = percepcion['percepcion']
-
         # 1. Monstruo en la misma celda → destruir
-        if p['energometro']:
+        if percepcion["energometro"]:
             self.reglas_usadas.add(0)
             return {"accion": "VACUUMATOR", "param": None, "razon": "monstruo_en_celda"}
 
-        # 2. Colisión previa (Vacuscopio) → girar
-        if p['vacuscopio']:
+        # 2. Colisión previa → girar
+        if percepcion["vacuscopio"]:
             self.reglas_usadas.add(1)
-            self.memoria['vacuscopio_activado'] = False
+            self.memoria["vacuscopio_activado"] = False
             return {"accion": "REORIENTADOR", "param": "+90", "razon": "obstaculo_detectado"}
 
-        # 3. Robot al frente → decisión cooperativa
-        if p['roboscanner']:
+        # 3. Robot al frente → rotación cooperativa
+        if percepcion["roboscanner"]:
             self.reglas_usadas.add(2)
             return {"accion": "REORIENTADOR", "param": "+90", "razon": "robot_al_frente"}
 
         # 4. Monstruo detectado cerca → orientar o avanzar
-        if p['monstroscopio']:
+        if percepcion["monstroscopio"]:
             self.reglas_usadas.add(3)
-            direccion = p['monstroscopio']
+            direccion = percepcion["monstroscopio"]
             if direccion == self.orientacion:
                 return {"accion": "PROPULSOR", "param": None, "razon": "monstruo_en_frente"}
             else:
                 return {"accion": "REORIENTADOR", "param": direccion, "razon": "alinear_con_monstruo"}
 
-        # 5. Acción por defecto → usar mapeo simbólico aprendido
-        clave: PercepcionClave = (
-            p['energometro'],
-            p['roboscanner'],
-            bool(p['monstroscopio']),
-            p['vacuscopio']
+        # 5. Acción por defecto (tabla simbólica)
+        clave: tuple = (
+            percepcion["energometro"],
+            percepcion["roboscanner"],
+            bool(percepcion["monstroscopio"]),
+            percepcion["vacuscopio"]
         )
         accion = self.tabla_mapeo[clave]
         self.reglas_usadas.add(4)
         return {"accion": accion, "param": None, "razon": "accion_por_defecto"}
 
+    def ejecutar_accion(self, accion: str, param: Optional[str], entorno: Any, monstruos: List[Any]) -> Dict[str, Any]:
+        """
+        Ejecuta físicamente la acción seleccionada mediante sus efectores.
+
+        Args:
+            accion (str): Nombre del efector a usar ("PROPULSOR", "REORIENTADOR", "VACUUMATOR").
+            param (Optional[str]): Parámetro adicional (ángulo o dirección).
+            entorno (EntornoOperacion): Entorno de Operación donde interactúa.
+            monstruos (List[Any]): Monstruos reflejo presentes (para el Vacuumator).
+
+        Returns:
+            Dict[str, Any]: Resultado estructurado de la acción ejecutada:
+                - 'exito': bool, indica si la acción se completó correctamente.
+                - 'razon': str, descripción textual del resultado.
+                - 'resultado': dict, detalles específicos (posición, entidad afectada, etc.).
+        """
+        if accion == "PROPULSOR":
+            return self._propulsor(entorno)
+
+        elif accion == "REORIENTADOR":
+            return self._reorientador(param or "+90")
+
+        elif accion == "VACUUMATOR":
+            return self._vacuumator(entorno, monstruos)
+
+        return {
+            "exito": False,
+            "razon": "accion_no_reconocida",
+            "resultado": {}
+        }
+
     # -------------------------------------------------------------------------
     # EFECTORES
     # -------------------------------------------------------------------------
-    def _propulsor(self, entorno: Any, robots: List[Any]) -> Dict[str, Any]:
+    def _propulsor(self, entorno: Any) -> Dict[str, Any]:
         """
         Efector **Propulsor Direccional**.
 
@@ -286,7 +308,8 @@ class AgenteRacionalRobot:
         if self.orientacion not in _ORIENTACIONES_CICLICAS:
             self.orientacion = '+X'
         i = _ORIENTACIONES_CICLICAS.index(self.orientacion)
-        self.orientacion = _ORIENTACIONES_CICLICAS[(i + 1) % 4] if sentido == '+90' else _ORIENTACIONES_CICLICAS[(i - 1) % 4]
+        self.orientacion = _ORIENTACIONES_CICLICAS[(i + 1) % 4] if sentido == '+90' else _ORIENTACIONES_CICLICAS[
+            (i - 1) % 4]
 
         return {
             "accion": "REORIENTADOR",
@@ -349,33 +372,20 @@ class AgenteRacionalRobot:
 
         Returns:
             Dict[str, Any]: Resultado del ciclo de vida:
-                - `'accion'`: efector utilizado.
-                - `'exito'`: indicador booleano del resultado.
-                - `'razon'`: descripción del motivo de la acción.
-                - `'resultado'`: detalles de la ejecución.
+                - 'accion': efector utilizado.
+                - 'exito': indicador booleano del resultado.
+                - 'razon': descripción del motivo de la acción.
         """
         percepcion = self.percibir(robots, monstruos)
         decision = self.decidir_accion(percepcion)
         accion, param = decision["accion"], decision["param"]
         self.actualizar_memoria(t, percepcion, accion)
-
-        if accion == "PROPULSOR":
-            evento = self._propulsor(entorno, robots)
-        elif accion == "REORIENTADOR":
-            evento = self._reorientador(param or "+90")
-        elif accion == "VACUUMATOR":
-            evento = self._vacuumator(entorno, monstruos)
-        else:
-            evento = {"exito": False, "razon": "accion_no_reconocida", "resultado": {}}
+        evento = self.ejecutar_accion(accion, param, entorno, monstruos)
 
         return {
-            "agent_id": self.id,
-            "tipo": "robot",
-            "tick": t,
             "accion": accion,
             "exito": evento.get("exito", False),
             "razon": evento.get("razon", decision.get("razon", "")),
-            "resultado": evento.get("resultado", {}),
         }
 
     # -------------------------------------------------------------------------
@@ -393,9 +403,14 @@ class AgenteRacionalRobot:
             percepcion (Dict[str, Any]): Información percibida del entorno.
             accion (str): Acción ejecutada durante el ciclo.
         """
-        self.memoria['historial'].append((t, dict(percepcion), accion, (self.x, self.y, self.z)))
-        if percepcion['percepcion'].get('vacuscopio'):
-            self.memoria['paredes_conocidas'].add(percepcion['percepcion'].get('celda_frontal'))
+        # Registrar solo tiempo, percepción y acción
+        self.memoria['historial'].append((t, dict(percepcion), accion))
+
+        # Si el Vacuscopio se activó, guardar la celda frontal como pared conocida
+        if percepcion.get('vacuscopio'):
+            celda_frontal = percepcion.get('celda_frontal')
+            if celda_frontal:
+                self.memoria['paredes_conocidas'].add(celda_frontal)
 
     def __repr__(self) -> str:
         """Representación textual simplificada del robot para depuración."""

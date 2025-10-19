@@ -77,16 +77,9 @@ class AgenteReflejoMonstruo:
                 - `'puede_moverse'`: indicador booleano de si hay celdas libres disponibles.
         """
         movimientos_validos = self._obtener_movimientos_validos(entorno)
-        percepcion_especifica = {
+        return {
             'movimientos_validos': movimientos_validos,
             'puede_moverse': bool(movimientos_validos)
-        }
-
-        return {
-            'id': self.id,
-            'tipo': 'monstruo',
-            'posicion': (self.x, self.y, self.z),
-            'percepcion': percepcion_especifica
         }
 
     def _obtener_movimientos_validos(self, entorno: Any) -> List[Tuple[int, int, int]]:
@@ -152,41 +145,41 @@ class AgenteReflejoMonstruo:
                 - `'param'`: nueva posición si aplica.
                 - `'razon'`: descripción del motivo de la decisión.
         """
-        p = percepcion['percepcion']
-
-        # No se activa hasta llegar a su ciclo K
+        # No se activa hasta su ciclo K
         if ciclo_actual % K != 0:
-            return {"accion": "inactivo", "param": None, "razon": "no_en_ciclo"}
+            return {"accion": "inactivo", "direccion": None, "razon": "no_en_ciclo"}
 
         # Probabilidad de movimiento no superada
         if random.random() > self.p_movimiento:
-            return {"accion": "inactivo", "param": None, "razon": "no_supera_probabilidad"}
+            return {"accion": "inactivo", "direccion": None, "razon": "no_supera_probabilidad"}
 
         # No hay direcciones disponibles
-        if not p['puede_moverse']:
-            return {"accion": "inactivo", "param": None, "razon": "sin_movimientos_validos"}
+        if not percepcion["puede_moverse"]:
+            return {"accion": "inactivo", "direccion": None, "razon": "sin_movimientos_validos"}
 
-        # Movimiento aleatorio hacia una Zona Libre adyacente
-        dx, dy, dz = random.choice(p['movimientos_validos'])
-        nueva_pos = (
-            percepcion['posicion'][0] + dx,
-            percepcion['posicion'][1] + dy,
-            percepcion['posicion'][2] + dz
-        )
+        direccion = random.choice(percepcion["movimientos_validos"])
         self.acciones_realizadas += 1
-        return {"accion": "mover", "param": nueva_pos, "razon": "movimiento_aleatorio"}
+        return {"accion": "mover", "direccion": direccion, "razon": "movimiento_aleatorio"}
 
-    def ejecutar_accion(self, accion: str, nueva_posicion: Optional[Tuple[int, int, int]]) -> None:
+    def ejecutar_accion(self, accion: str, direccion: Optional[Tuple[int, int, int]]) -> bool:
         """
         Ejecuta físicamente la acción seleccionada, actualizando su posición si aplica.
 
         Args:
             accion (str): Tipo de acción a ejecutar ("mover" o "inactivo").
-            nueva_posicion (Optional[Tuple[int, int, int]]): Nueva posición (x, y, z)
-                hacia la que se desplaza el agente, en caso de movimiento válido.
+            direccion (Optional[Tuple[int, int, int]]): Vector de desplazamiento (dx, dy, dz)
+                hacia el cual el agente se moverá si aplica.
+
+        Returns:
+            bool: True si el movimiento se ejecutó correctamente, False en caso contrario.
         """
-        if accion == 'mover' and nueva_posicion:
-            self.x, self.y, self.z = nueva_posicion
+        if accion == "mover" and direccion:
+            dx, dy, dz = direccion
+            self.x += dx
+            self.y += dy
+            self.z += dz
+            return True
+        return False
 
     # -------------------------------------------------------------------------
     # CICLO DE VIDA DEL AGENTE
@@ -203,32 +196,18 @@ class AgenteReflejoMonstruo:
 
         Returns:
             Dict[str, Any]: Información estructurada sobre la acción ejecutada:
-                - `'agent_id'`: Identificador del agente.
-                - `'tipo'`: Tipo de entidad ("monstruo").
-                - `'tick'`: Ciclo energético en el que actuó.
                 - `'accion'`: Acción ejecutada ("mover" o "inactivo").
                 - `'exito'`: Indicador booleano del resultado.
                 - `'razon'`: Justificación textual de la decisión.
-                - `'resultado'`: Detalles del nuevo estado (posición, movimiento, etc.).
         """
         percepcion = self.percibir(entorno)
         decision = self.decidir_accion(percepcion, t, K)
-        accion, param = decision["accion"], decision["param"]
-        self.ejecutar_accion(accion, param)
-
-        exito = accion == "mover" and decision.get("param") is not None
-
+        accion, direccion = decision["accion"], decision["direccion"]
+        exito = self.ejecutar_accion(accion, direccion)
         return {
-            "agent_id": self.id,
-            "tipo": "monstruo",
-            "tick": t,
             "accion": accion,
             "exito": exito,
-            "razon": decision.get("razon", ""),
-            "resultado": {
-                "nueva_pos": (self.x, self.y, self.z),
-                "se_movio": exito
-            }
+            "razon": decision.get("razon", "")
         }
 
     # -------------------------------------------------------------------------
