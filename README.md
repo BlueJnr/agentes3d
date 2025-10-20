@@ -1,113 +1,125 @@
 # ⚡ Simulación Energética 3D de Agentes Inteligentes
 
-Este proyecto implementa una **Simulación Energética Tridimensional (N³)** donde interactúan dos tipos de entidades:
-
-- 🤖 **Robots Racionales** (agentes materiales con memoria y razonamiento simbólico).
-- 👾 **Monstruos Reflejos** (agentes energéticos sin memoria, de comportamiento aleatorio).
-
-Ambos operan dentro de un **Entorno de Operación Energético** que cumple los principios del documento  
-📘 *Diseño e Implementación de Agentes* y los **Requisitos del Agente**, priorizando un comportamiento realista,
-jerárquico y determinista.
+Este proyecto implementa una **Simulación Energética Tridimensional (N³)** donde interactúan **agentes inteligentes
+heterogéneos** dentro de un entorno dinámico.  
+El objetivo es modelar la **cooperación, racionalidad y reactividad energética** en un sistema de multiagentes.
 
 ---
 
-## 🧠 Descripción General
+## 🧩 Arquitectura del Sistema
 
-### 🤖 Agente Racional – Robot (`agent_robot.py`)
+### 🌍 Entorno de Operación Energético
 
-Agente racional con **memoria individual**, **sensores energéticos** y **efectores direccionales**.  
-Actúa mediante una jerarquía de reglas deterministas y una tabla simbólica percepción–acción.
+El entorno define un **espacio tridimensional discreto (N×N×N)** compuesto por:
 
-**Sensores implementados:**
-
-- 🧭 **Giroscopio** → orientación actual del robot.
-- 👁️ **Monstroscopio** → detecta monstruos en los cinco costados visibles (excepto el posterior).
-- ⚡ **Energómetro** → detecta un monstruo en la misma celda.
-- 🚧 **Vacuscopio** → se activa al chocar contra una Zona Vacía.
-- 🤝 **Roboscanner** → detecta otro robot directamente al frente.
-
-**Efectores implementados:**
-
-- 🛞 **Propulsor Direccional** → avanza hacia adelante si la celda es libre.
-- 🔄 **Reorientador** → rota 90° o se alinea con una dirección específica.
-- 💥 **Vacuumator** → destruye el monstruo y convierte la celda en Zona Vacía, eliminando también al robot (
-  autodestrucción).
-
-**Características adicionales:**
-
-- Jerarquía de reglas P0–P4 (Energómetro, Vacuscopio, Roboscanner, Monstroscopio, Tabla Base).
-- Memoria con historial, paredes conocidas y posición anterior.
-- Comunicación determinista entre robots (prioridad por ID).
-- Sin aleatoriedad excepto en encuentros, según especificación.
-
----
-
-### 👾 Agente Reflejo Simple – Monstruo (`agent_monster.py`)
-
-Agente reflejo sin memoria ni aprendizaje.  
-Opera con una frecuencia `K` y probabilidad de movimiento `p_movimiento`.
-
-**Comportamiento:**
-
-- Cada `K` ciclos energéticos, con probabilidad `p_movimiento`, intenta moverse hacia una de las **6 direcciones válidas
-  ** (+X, -X, +Y, -Y, +Z, -Z).
-- Solo puede desplazarse a **Zonas Libres**, nunca atraviesa **Zonas Vacías** ni bordes del entorno.
-- Su acción es completamente reactiva (agente reflejo simple).
-
----
-
-### 🌍 Entorno de Operación Energético (`environment.py`)
-
-Espacio cúbico tridimensional de tamaño `N³`, conformado por:
-
-- `0` → **Zona Libre (Pfree)** — transitable.
-- `1` → **Zona Vacía (Psoft)** — bloqueada o fuera de límites.
+| Tipo de Zona              | Código | Descripción                                      |
+|---------------------------|--------|--------------------------------------------------|
+| 🟩 **Zona Libre (Pfree)** | `0`    | Espacio transitable y accesible por los agentes. |
+| ⬛ **Zona Vacía (Psoft)**  | `1`    | Barrera energética o límite del entorno.         |
 
 **Características clave:**
 
-- Borde exterior compuesto enteramente por Zonas Vacías (barrera energética).
-- Generación aleatoria del entorno con parámetros `Pfree`, `Psoft` y `seed`.
-- Registro, eliminación y visualización de entidades.
-- Métodos para validar movimientos y detectar colisiones energéticas.
+- Borde exterior compuesto exclusivamente por Zonas Vacías.
+- Generación probabilística del entorno (`Pfree`, `Psoft`) controlada por semilla (`seed`).
+- Administración centralizada del registro y posición de agentes.
+- Validación topológica de colisiones y movimientos.
 
 ---
 
-### 🧩 Motor de Simulación (`simulation.py`)
+### 🤖 Agente Racional – *Robot Material*
 
-Coordina el ciclo de vida completo:
+Agente racional simbólico que utiliza **memoria**, **percepción** y **razonamiento jerárquico** para actuar en su
+entorno.
 
-1. Percepción → Decisión → Acción.
-2. Activación periódica de monstruos (cada `K` ciclos con `p_movimiento`).
-3. Ejecución secuencial de robots racionales (1 acción por segundo).
-4. Destrucción energética de monstruos y robots mediante el Vacuumator.
-5. Visualización textual y gráfica por capas energéticas.
+#### 🔍 Sensores implementados
 
-También puede exportar logs de acciones y resultados para análisis o métricas de racionalidad.
+| Sensor                | Función                                           |
+|-----------------------|---------------------------------------------------|
+| 🧭 **Giroscopio**     | Indica la orientación actual.                     |
+| 👁️ **Monstroscopio** | Detecta monstruos en los cinco costados visibles. |
+| ⚡ **Energómetro**     | Detecta monstruos en la misma celda.              |
+| 🚧 **Vacuscopio**     | Señala colisiones con zonas vacías.               |
+| 🤝 **Roboscanner**    | Detecta otro robot directamente al frente.        |
+
+#### ⚙️ Efectores implementados
+
+| Efector                      | Acción                                                                |
+|------------------------------|-----------------------------------------------------------------------|
+| 🛞 **Propulsor Direccional** | Avanza hacia adelante si la celda está libre.                         |
+| 🔄 **Reorientador**          | Rota 90° o se alinea con dirección específica.                        |
+| 💥 **Vacuumator**            | Destruye monstruos, convierte celda en vacía y autodestruye al robot. |
+
+#### 🧠 Inteligencia simbólica
+
+- Basada en reglas deterministas **P0–P4**.
+- Estructura de decisión:
+  ```
+  P0 → Energómetro
+  P1 → Vacuscopio
+  P2 → Roboscanner
+  P3 → Monstroscopio
+  P4 → Tabla base de comportamiento
+  ```
+- Almacenamiento de historial y orientación previa.
+- Detección y evasión automática de bucles conductuales.
 
 ---
 
-### 🧊 Visualizador 3D Manual (`visual_3d_manual.py`)
+### 👾 Agente Reflejo – *Monstruo Energético*
 
-Interfaz **PyOpenGL** para visualizar el entorno energético tridimensional.  
-Permite avanzar manualmente los ciclos con la barra espaciadora.
+Agente sin memoria ni razonamiento. Opera de forma aleatoria y periódica, reaccionando únicamente a su entorno
+inmediato.
 
-**Controles principales:**
-
-- `ESPACIO` → Avanza un tick de simulación.
-- `W / S` → Zoom in / out.
-- Arrastrar con el mouse → rotar el entorno.
-- `ESC` → salir de la simulación.
-
-Representación visual:
-
-- 🟥 Robots racionales.
-- 🟦 Monstruos reflejos.
-- ⬜ Zonas Libres (translúcidas).
-- ⬛ Zonas Vacías (bloqueadas).
+- Se activa cada `K` ciclos energéticos.
+- Posee una **probabilidad de movimiento** `p_movimiento`.
+- Solo se mueve a **Zonas Libres** y nunca atraviesa bordes ni zonas vacías.
+- Modelo canónico de **agente reflejo simple** según Russell & Norvig.
 
 ---
 
-## 🚀 Ejecución
+### 🔄 Motor de Simulación Energética (`simulation.py`)
+
+Coordina la **dinámica energética global** del sistema.
+
+#### Ciclo principal:
+
+1. Activación de **monstruos reflejos** cada `K` ciclos.
+2. Ejecución de **robots racionales** en orden secuencial (1 acción/ciclo).
+3. Actualización del entorno y visualización de la capa central.
+4. Registro y trazabilidad de eventos (percepción, acción, resultado).
+
+**Modos de ejecución:**
+
+- ⏱️ **Automático:** iteraciones temporizadas (`delay`).
+- 🧊 **Manual 3D:** avance paso a paso (controlado por el usuario).
+
+---
+
+### 🧊 Visualizador 3D Interactivo (`visual_3d_manual.py`)
+
+Renderizado en tiempo real con **PyOpenGL + GLUT**.
+
+#### 🎮 Controles principales
+
+| Acción        | Tecla / Control     |
+|---------------|---------------------|
+| Avanzar tick  | `ESPACIO`           |
+| Zoom in / out | `W / S`             |
+| Rotar entorno | Arrastrar con mouse |
+| Salir         | `ESC`               |
+
+#### 🧱 Representación visual
+
+| Elemento            | Color             | Descripción                 |
+|---------------------|-------------------|-----------------------------|
+| 🤖 Robot racional   | 🟥 Rojo           | Agente racional activo      |
+| 👾 Monstruo reflejo | 🟦 Azul           | Agente energético aleatorio |
+| ⬜ Zona Libre        | Verde translúcida | Espacio accesible           |
+| ⬛ Zona Vacía        | Gris opaco        | Barrera o límite energético |
+
+---
+
+## 🚀 Ejecución del Sistema
 
 ### 1️⃣ Instalar dependencias
 
@@ -115,31 +127,30 @@ Representación visual:
 pip install -r requirements.txt
 ```
 
-### 2️⃣ Ejecutar la simulación automática
+### 2️⃣ Ejecutar simulación automática
 
 ```bash
 python main.py
 ```
 
-Por defecto, ejecuta la simulación con:
+Configuración por defecto:
+| Parámetro | Valor | Descripción |
+|------------|--------|-------------|
+| `N` | 6 | Dimensión cúbica (6×6×6) |
+| `Nrobots` | 2 | Robots racionales |
+| `Nmonstruos` | 2 | Monstruos reflejos |
+| `ticks` | 10 | Ciclos energéticos |
+| `K_monstruo` | 3 | Frecuencia de activación |
+| `seed` | 42 | Reproducibilidad experimental |
 
-- N = 6
-- 2 Robots
-- 2 Monstruos
-- 10 ciclos energéticos (`ticks`)
-- Frecuencia de monstruo `K = 3`
-- Semilla reproducible `seed = 42`
+### 3️⃣ Modo 3D Manual (interactivo)
 
-### 3️⃣ (Opcional) Modo manual 3D
-
-Descomenta en `main.py`:
+En `main.py` descomenta:
 
 ```python
 # simulacion.ejecutar(delay=0.2)
 simulacion.ejecutar_manual_3d()
 ```
-
-y visualiza el entorno en 3D interactivo.
 
 ---
 
@@ -149,41 +160,56 @@ y visualiza el entorno en 3D interactivo.
 agentes3d/
 │
 ├── agentes/
-│   ├── __init__.py
-│   ├── agent_monster.py        # Agente reflejo simple (Monstruo)
-│   ├── agent_robot.py          # Agente racional (Robot)
-│   ├── environment.py          # Entorno energético 3D
-│   ├── simulation.py           # Motor de simulación
-│   ├── visual_3d_manual.py     # Visualización 3D manual con PyOpenGL
+│   ├── agent_monster.py       # Agente reflejo simple (Monstruo)
+│   ├── agent_robot.py         # Agente racional (Robot)
+│   ├── environment.py         # Entorno energético tridimensional
+│   ├── simulation.py          # Motor de simulación energética
+│   ├── visual_3d_manual.py    # Visualización 3D interactiva
 │
-├── main.py                     # Punto de entrada del sistema
-├── README.md
+├── main.py                    # Punto de entrada del sistema
 ├── requirements.txt
+├── README.md
 └── .gitignore
 ```
 
 ---
 
-## 🧪 Tecnologías utilizadas
+## 📊 Métricas y Extensibilidad
+
+El sistema está diseñado para **investigación experimental en inteligencia artificial distribuida**, con soporte para
+métricas y extensiones:
+
+| Categoría                       | Descripción                                                            |
+|---------------------------------|------------------------------------------------------------------------|
+| 🔁 **Reproducibilidad**         | Control mediante `seed` y logging estructurado.                        |
+| 📈 **Métricas de racionalidad** | Tasa de éxito de reglas, colisiones, uso de Vacuumator.                |
+| 🧩 **Extensibilidad modular**   | Permite incorporar nuevos tipos de sensores o reglas.                  |
+| ⚡ **Integración futura**        | Compatible con frameworks de IA simbólica o redes neuronales híbridas. |
+
+---
+
+## 🧪 Tecnologías Utilizadas
 
 - 🐍 **Python 3.10+**
-- 🔢 **NumPy** – modelado del entorno 3D
-- 🧠 **Programación orientada a agentes**
-- 💻 **PyOpenGL + GLUT** – visualización 3D manual
-- 🧩 **Estructuras simbólicas y reglas deterministas**
+- 🔢 **NumPy** – modelado espacial 3D
+- 💻 **PyOpenGL + GLUT** – visualización tridimensional
+- 🧠 **Arquitectura de Agentes Inteligentes**
+- 🧩 **Diseño basado en reglas deterministas y memoria simbólica**
 
 ---
 
 ## 👥 Autores
 
-Proyecto académico desarrollado por:
+**Proyecto académico desarrollado por:**
 
-- **Jhunior Cuadros** — Desarrollo, integración y refactorización del sistema de agentes.  
-- **Andrés Flores** y **John Baldeon** — Contribuciones en módulos base de los agentes.  
-- **Ronald Ticona** y **Guillermo Colchado** — Apoyo en requisitos y validación funcional.
+- **Jhunior Cuadros** — Arquitectura, desarrollo y refactorización del sistema completo.
+- **Andrés Flores** y **John Baldeon** — Implementación de módulos base de agentes.
+- **Ronald Ticona** y **Guillermo Colchado** — Análisis de requisitos y validación funcional.
 
 ---
 
 ## 📜 Licencia
 
-Este proyecto tiene fines **académicos** y se distribuye bajo la **licencia MIT**.
+Este software se distribuye bajo la **Licencia MIT** con fines educativos, de investigación y demostración académica.  
+Las referencias teóricas provienen del marco de agentes inteligentes propuesto por *Russell & Norvig (AI: A Modern
+Approach)* y adaptado al contexto energético tridimensional.
