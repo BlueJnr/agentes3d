@@ -69,7 +69,6 @@ class AgenteRacionalRobot:
         # Memoria interna del agente racional
         self.memoria: Dict[str, Any] = {
             'historial': [],  # [(t, percepcion, accion, posicion)]
-            'paredes_conocidas': set(),  # Celdas donde el Vacuscopio se activó
             'vacuscopio_activado': False,
             'posicion_anterior': (x, y, z)
         }
@@ -271,7 +270,6 @@ class AgenteRacionalRobot:
             }
 
         # Colisión con Zona Vacía → activa Vacuscopio
-        self.memoria['paredes_conocidas'].add((nx, ny, nz))
         self.memoria['vacuscopio_activado'] = True
         return {
             "accion": "PROPULSOR",
@@ -403,14 +401,21 @@ class AgenteRacionalRobot:
             percepcion (Dict[str, Any]): Información percibida del entorno.
             accion (str): Acción ejecutada durante el ciclo.
         """
-        # Registrar solo tiempo, percepción y acción
-        self.memoria['historial'].append((t, dict(percepcion), accion))
+        estado_perceptual = {
+            'ori': percepcion.get('giroscopio'),
+            'E': percepcion.get('energometro', False),
+            'R': percepcion.get('roboscanner', False),
+            'M': bool(percepcion.get('monstroscopio')),
+            'V': percepcion.get('vacuscopio', False),
+            'pos_prev': percepcion.get('posicion_anterior'),  # único dato espacial permitido
+        }
 
-        # Si el Vacuscopio se activó, guardar la celda frontal como pared conocida
-        if percepcion.get('vacuscopio'):
-            celda_frontal = percepcion.get('celda_frontal')
-            if celda_frontal:
-                self.memoria['paredes_conocidas'].add(celda_frontal)
+        # Guardar en el historial
+        self.memoria['historial'].append({
+            't': t,
+            'p': estado_perceptual,
+            'a': accion
+        })
 
     def __repr__(self) -> str:
         """Representación textual simplificada del robot para depuración."""
