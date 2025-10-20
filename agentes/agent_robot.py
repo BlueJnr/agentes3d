@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 # Direcciones y rotaciones posibles en el espacio energético tridimensional
-_DIRECCIONES: Dict[str, Tuple[int, int, int]] = {
+_ORIENTACIONES: Dict[str, Tuple[int, int, int]] = {
     '+X': (1, 0, 0), '-X': (-1, 0, 0),
     '+Y': (0, 1, 0), '-Y': (0, -1, 0),
     '+Z': (0, 0, 1), '-Z': (0, 0, -1)
@@ -64,7 +64,7 @@ class AgenteRacionalRobot:
         """
         self.id = id
         self.x, self.y, self.z = int(x), int(y), int(z)
-        self.orientacion = orientacion if orientacion in _DIRECCIONES else random.choice(list(_DIRECCIONES.keys()))
+        self.orientacion = orientacion if orientacion in _ORIENTACIONES else random.choice(list(_ORIENTACIONES.keys()))
 
         # Memoria interna del agente racional
         self.memoria: Dict[str, Any] = {
@@ -106,7 +106,7 @@ class AgenteRacionalRobot:
                 - `'monstroscopio'`: dirección del monstruo detectado (5 costados).
                 - `'celda_frontal'`: coordenadas de la celda hacia la que mira.
         """
-        dx, dy, dz = _DIRECCIONES[self.orientacion]
+        dx, dy, dz = _ORIENTACIONES[self.orientacion]
         frente = (self.x + dx, self.y + dy, self.z + dz)
 
         return {
@@ -135,7 +135,7 @@ class AgenteRacionalRobot:
             el monstruo; None si no hay detección.
         """
         atras = (-dx, -dy, -dz)
-        for dir_label, (ddx, ddy, ddz) in _DIRECCIONES.items():
+        for dir_label, (ddx, ddy, ddz) in _ORIENTACIONES.items():
             if (ddx, ddy, ddz) == atras:
                 continue
             if any((m.x, m.y, m.z) == (self.x + ddx, self.y + ddy, self.z + ddz) for m in monstruos):
@@ -255,7 +255,7 @@ class AgenteRacionalRobot:
                 - `'resultado'`: nueva posición o celda bloqueada.
                 - `'razon'`: descripción textual del evento.
         """
-        dx, dy, dz = _DIRECCIONES[self.orientacion]
+        dx, dy, dz = _ORIENTACIONES[self.orientacion]
         nx, ny, nz = self.x + dx, self.y + dy, self.z + dz
 
         tipo = entorno.obtener_tipo_celda(nx, ny, nz)
@@ -295,7 +295,7 @@ class AgenteRacionalRobot:
                 - `'nueva_orientacion'`: orientación posterior al giro.
                 - `'razon'`: motivo del cambio.
         """
-        if sentido in _DIRECCIONES:
+        if sentido in _ORIENTACIONES:
             self.orientacion = sentido
             return {
                 "accion": "REORIENTADOR",
