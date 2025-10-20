@@ -13,8 +13,9 @@ _ORIENTACIONES: Dict[str, Tuple[int, int, int]] = {
 # Rotación cíclica en el plano XY (el robot no tiene arriba ni abajo)
 _ORIENTACIONES_CICLICAS = ['+X', '+Y', '-X', '-Y']
 
-PercepcionClave = Tuple[bool, bool, bool, bool]  # (energómetro, roboscanner, monstroscopio, vacuscopio)
-
+# Estructura de percepción extendida:
+# (energómetro, roboscanner, (monstroscopio_detectado, posicion_relativa), vacuscopio)
+PercepcionClave = Tuple[bool, bool, Tuple[bool, Optional[str]], bool]
 
 class AgenteRacionalRobot:
     """
@@ -73,11 +74,42 @@ class AgenteRacionalRobot:
             'posicion_anterior': (x, y, z)
         }
 
-        # Tabla de mapeo simbólico (percepción → acción)
-        self.tabla_mapeo: Dict[PercepcionClave, str] = defaultdict(lambda: 'PROPULSOR')
-        self.tabla_mapeo[(True, False, False, False)] = 'VACUUMATOR'
-        self.tabla_mapeo[(False, True, False, False)] = 'REORIENTADOR'
-        self.tabla_mapeo[(False, False, True, False)] = 'PROPULSOR'
+        # Tabla percepción–acción jerárquica
+        self.tabla_mapeo: Dict[PercepcionClave, Dict[str, Any]] = {
+            # --- Nivel 1: Energómetro activo ---
+            (True, True, (True, "al_frente"), True): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, True, (True, "al_lado"), True): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, True, (True, "al_frente"), False): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, True, (True, "al_lado"), False): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, True, (False, None), True): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, True, (False, None), False): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, False, (True, "al_frente"), True): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, False, (True, "al_lado"), True): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, False, (True, "al_frente"), False): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, False, (True, "al_lado"), False): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, False, (False, None), True): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+            (True, False, (False, None), False): {"accion": "VACUUMATOR", "razon": "monstruo_en_celda"},
+
+            # --- Nivel 2: Vacuscopio activo ---
+            (False, True, (True, "al_frente"), True): {"accion": "REORIENTADOR", "param": "+90", "razon": "obstaculo_detectado"},
+            (False, True, (True, "al_lado"), True): {"accion": "REORIENTADOR", "param": "+90", "razon": "obstaculo_detectado"},
+            (False, True, (False, None), True): {"accion": "REORIENTADOR", "param": "+90", "razon": "obstaculo_detectado"},
+            (False, False, (True, "al_frente"), True): {"accion": "REORIENTADOR", "param": "+90", "razon": "obstaculo_detectado"},
+            (False, False, (True, "al_lado"), True): {"accion": "REORIENTADOR", "param": "+90", "razon": "obstaculo_detectado"},
+            (False, False, (False, None), True): {"accion": "REORIENTADOR", "param": "+90", "razon": "obstaculo_detectado"},
+
+            # --- Nivel 3: Robot al frente ---
+            (False, True, (True, "al_frente"), False): {"accion": "REORIENTADOR", "param": "+90", "razon": "robot_al_frente"},
+            (False, True, (True, "al_lado"), False): {"accion": "REORIENTADOR", "param": "+90", "razon": "robot_al_frente"},
+            (False, True, (False, None), False): {"accion": "REORIENTADOR", "param": "+90", "razon": "robot_al_frente"},
+
+            # --- Nivel 4: Monstruo detectado cerca ---
+            (False, False, (True, "al_frente"), False): {"accion": "PROPULSOR", "razon": "monstruo_en_frente"},
+            (False, False, (True, "al_lado"), False): {"accion": "REORIENTADOR", "razon": "alinear_con_monstruo"},
+
+            # --- Nivel 5: Acción por defecto ---
+            (False, False, (False, None), False): {"accion": "PROPULSOR", "razon": "accion_por_defecto"},
+        }
 
         self.reglas_usadas: Set[int] = set()
 
@@ -117,90 +149,99 @@ class AgenteRacionalRobot:
             'posicion_anterior': self.memoria.get('posicion_anterior')
         }
 
-    def _detectar_monstruos(self, monstruos: List[Any], dx: int, dy: int, dz: int) -> Optional[str]:
+    def _detectar_monstruos(
+            self,
+            monstruos: List[Any],
+            dx: int,
+            dy: int,
+            dz: int
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
-        Implementa el sensor **Monstroscopio**.
+        Detecta la presencia y posición relativa de un monstruo mediante el sensor Monstroscopio.
 
-        Detecta la existencia de un monstruo en cualquiera de los cinco costados
-        visibles del robot (frontal, laterales y superior/inferior relativos),
-        excluyendo su parte posterior.
+        El sensor analiza los cinco costados visibles del robot (frontal, laterales y superior/inferior),
+        excluyendo su parte posterior. Si un monstruo es detectado, devuelve una tupla estructurada con
+        el estado de detección, la posición relativa y la orientación espacial correspondiente.
 
         Args:
-            monstruos (List[Any]): Lista de entidades monstruo activas.
-            dx, dy, dz (int): Dirección actual del frente del robot.
+            monstruos (List[Any]): Lista de entidades monstruo activas en el entorno energético.
+            dx (int): Componente X de la orientación actual del robot.
+            dy (int): Componente Y de la orientación actual del robot.
+            dz (int): Componente Z de la orientación actual del robot.
 
         Returns:
-            Optional[str]: Etiqueta de dirección ('+X', '-Y', etc.) donde se detectó
-            el monstruo; None si no hay detección.
+            Tuple[bool, Optional[str], Optional[str]]: Tupla con la información de detección del Monstroscopio:
+                - ``detectado`` (bool): Indica si se detectó un monstruo.
+                - ``pos_relativa`` (Optional[str]): Posición del monstruo respecto al robot.
+                  Puede ser ``"al_frente"`` o ``"al_lado"``; ``None`` si no se detecta nada.
+                - ``orientacion_monstruo`` (Optional[str]): Dirección cardinal donde se encuentra
+                  el monstruo (por ejemplo, ``'+X'``, ``'-Y'``); ``None`` si no hay detección.
+
         """
         atras = (-dx, -dy, -dz)
         for dir_label, (ddx, ddy, ddz) in _ORIENTACIONES.items():
             if (ddx, ddy, ddz) == atras:
                 continue
             if any((m.x, m.y, m.z) == (self.x + ddx, self.y + ddy, self.z + ddz) for m in monstruos):
-                return dir_label
-        return None
+                if (ddx, ddy, ddz) == (dx, dy, dz):
+                    return True, "al_frente", dir_label
+                else:
+                    return True, "al_lado", dir_label
+        return False, None, None
 
     # -------------------------------------------------------------------------
     # DECISIÓN
     # -------------------------------------------------------------------------
     def decidir_accion(self, percepcion: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Determina la acción a ejecutar en función de la percepción actual.
+        Determina la acción a ejecutar a partir de la percepción actual del entorno.
 
-        El robot aplica una jerarquía de reglas racionales basada en la tabla
-        percepción–acción y su memoria interna. Las prioridades son:
+        El agente consulta su tabla percepción–acción para decidir qué efector activar.
+        Si la regla correspondiente no especifica un parámetro de dirección (`param`),
+        se utiliza la orientación detectada por el sensor `monstroscopio` como valor por defecto.
 
-            1. **Energómetro** activo → usar Vacuumator.
-            2. **Vacuscopio** activo → girar (Reorientador).
-            3. **Roboscanner** detecta robot al frente → coordinar rotación.
-            4. **Monstroscopio** detecta monstruo → orientarse o avanzar.
-            5. Caso por defecto → aplicar acción según tabla mapeo (aprendida).
+        La clave de decisión se construye con las siguientes percepciones:
+            (energómetro, roboscanner, (monstroscopio.detectado, monstroscopio.pos_relativa), vacuscopio)
 
         Args:
-            percepcion (Dict[str, Any]): Resultado del sensor `percibir()`.
+            percepcion (Dict[str, Any]): Estructura generada por `percibir()`, que contiene
+                las lecturas actuales de los sensores del agente.
 
         Returns:
-            Dict[str, Any]: Acción seleccionada con su motivo:
-                - `'accion'`: nombre del efector a usar.
-                - `'param'`: dirección o ángulo si aplica.
-                - `'razon'`: justificación textual.
+            Dict[str, Any]: Diccionario con la decisión seleccionada, con los siguientes campos:
+                - ``accion`` (str): Nombre del efector a ejecutar (p. ej., "VACUUMATOR", "PROPULSOR").
+                - ``param`` (Optional[str]): Dirección o ángulo asociado a la acción. Si no se
+                  encuentra definido en la regla, se toma de `monstroscopio[2]`.
+                - ``razon`` (str): Descripción textual que explica la justificación de la acción.
+
         """
-        # 1. Monstruo en la misma celda → destruir
-        if percepcion["energometro"]:
-            self.reglas_usadas.add(0)
-            return {"accion": "VACUUMATOR", "param": None, "razon": "monstruo_en_celda"}
-
-        # 2. Colisión previa → girar
-        if percepcion["vacuscopio"]:
-            self.reglas_usadas.add(1)
-            self.memoria["vacuscopio_activado"] = False
-            return {"accion": "REORIENTADOR", "param": "+90", "razon": "obstaculo_detectado"}
-
-        # 3. Robot al frente → rotación cooperativa
-        if percepcion["roboscanner"]:
-            self.reglas_usadas.add(2)
-            return {"accion": "REORIENTADOR", "param": "+90", "razon": "robot_al_frente"}
-
-        # 4. Monstruo detectado cerca → orientar o avanzar
-        if percepcion["monstroscopio"]:
-            self.reglas_usadas.add(3)
-            direccion = percepcion["monstroscopio"]
-            if direccion == self.orientacion:
-                return {"accion": "PROPULSOR", "param": None, "razon": "monstruo_en_frente"}
-            else:
-                return {"accion": "REORIENTADOR", "param": direccion, "razon": "alinear_con_monstruo"}
-
-        # 5. Acción por defecto (tabla simbólica)
-        clave: tuple = (
+        clave = (
             percepcion["energometro"],
             percepcion["roboscanner"],
-            bool(percepcion["monstroscopio"]),
+            percepcion["monstroscopio"][:2],  # (detectado, posicion_relativa)
             percepcion["vacuscopio"]
         )
-        accion = self.tabla_mapeo[clave]
-        self.reglas_usadas.add(4)
-        return {"accion": accion, "param": None, "razon": "accion_por_defecto"}
+
+        # Reinicia el estado del Vacuscopio para la siguiente iteración
+        self.memoria["vacuscopio_activado"] = False
+
+        # Recupera la regla correspondiente de la tabla percepción–acción
+        regla = self.tabla_mapeo.get(clave)
+        if regla:
+            # Si no tiene parámetro explícito, usar la dirección detectada por el Monstroscopio
+            param = regla.get("param", percepcion["monstroscopio"][2])
+            return {
+                "accion": regla["accion"],
+                "param": param,
+                "razon": regla["razon"]
+            }
+
+        # Regla por defecto (no se encontró coincidencia en la tabla)
+        return {
+            "accion": "PROPULSOR",
+            "param": percepcion["monstroscopio"][2],
+            "razon": "accion_por_defecto"
+        }
 
     def ejecutar_accion(self, accion: str, param: Optional[str], entorno: Any, monstruos: List[Any]) -> Dict[str, Any]:
         """
