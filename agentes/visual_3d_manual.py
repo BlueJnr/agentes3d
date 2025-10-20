@@ -297,22 +297,6 @@ class Visualizador3DManual:
             print(f"  🤖 [Robot {robot.id}] Acción: {evento['accion']:<12} → {exito} | Regla: {razon}")
             print(f"     📍 Posición actual: ({robot.x}, {robot.y}, {robot.z})")
 
-            # 📜 Historial de acciones
-            if hasattr(robot, "memoria") and "historial" in robot.memoria:
-                historial = robot.memoria["historial"]
-                if historial:
-                    print("     🧾 Últimos pasos registrados:")
-                    for t, percepcion, accion_hist in historial[-100:]:  # mostrar últimos 5
-                        # Extraer celda frontal si existe en la percepción
-                        celda_frontal = percepcion.get("celda_frontal")
-                        celda_str = f" → celda_frontal={celda_frontal}" if celda_frontal else ""
-                        print(f"        • Tick {t:>2}: {accion_hist:<10}{celda_str}")
-                else:
-                    print("     🧾 Historial vacío.")
-            else:
-                print("     ⚠️  Robot sin memoria registrada.")
-
-            # Evento especial: Vacuumator
             if evento["accion"] == "VACUUMATOR" and evento["exito"]:
                 print(f"     ⚠️  [Robot {robot.id}] se autodestruye con Vacuumator (celda transformada).")
                 self.simulacion.entorno.eliminar_robot(robot.id)
