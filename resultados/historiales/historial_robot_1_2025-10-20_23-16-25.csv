@@ -1,7 +1,0 @@
-t,orientacion,energometro,roboscanner,monstroscopio,vacuscopio,posicion_anterior,accion
-0,-Y,False,False,True,False,"(4, 5, 5)",PROPULSOR
-1,-Y,False,False,True,False,"(4, 5, 5)",PROPULSOR
-2,-Y,False,False,True,False,"(4, 4, 5)",PROPULSOR
-3,-Y,False,False,True,False,"(4, 3, 5)",PROPULSOR
-4,-Y,False,False,True,False,"(4, 2, 5)",PROPULSOR
-5,-Y,True,False,True,False,"(4, 1, 5)",VACUUMATOR
