@@ -15,6 +15,8 @@ if __name__ == "__main__":
         p_movimiento=0.7  # Probabilidad de movimiento de cada monstruo
     )
 
+    simulacionE2.ejecutar(delay=0.2)
+
     simulacionE1 = SimulacionEnergetica(
         N=6,  # mismo tamaño
         Nrobots=2,  # igual que el intermedio
@@ -26,6 +28,8 @@ if __name__ == "__main__":
         Psoft=0.05,  # - obstáculos
         p_movimiento=0.05  # ~0: elimina el azar en los adversarios
     )
+
+    simulacionE1.ejecutar(delay=0.2)
 
     simulacionE3 = SimulacionEnergetica(
         N=6,  # mismo tamaño
@@ -40,5 +44,5 @@ if __name__ == "__main__":
     )
 
     # Ejecución de la simulación
-    simulacionE2.ejecutar(delay=0.2)
+    simulacionE3.ejecutar(delay=0.2)
     #simulacion.ejecutar_manual_3d()

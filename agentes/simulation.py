@@ -155,6 +155,13 @@ class SimulacionEnergetica:
         # ------------------------------------------------------------
         self._mostrar_estadisticas()
 
+        # ------------------------------------------------------------
+        # EXPORTAR HISTORIALES DE CADA ROBOT
+        # ------------------------------------------------------------
+        for robot in self.entorno.robots:
+            if hasattr(robot, "exportar_historial_csv"):
+                robot.exportar_historial_csv()
+
     # -------------------------------------------------------------------------
     # ESTADÍSTICAS Y MÉTRICAS
     # -------------------------------------------------------------------------

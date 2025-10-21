@@ -264,6 +264,53 @@ class AgenteRacionalRobot:
         if random.random() < 0.4:
             self._propulsor(entorno)
 
+    def exportar_historial_csv(self, carpeta: str = "resultados/historiales") -> None:
+        """Exporta el historial de percepciones y acciones del robot a un CSV con fecha y hora en el nombre."""
+
+        import csv
+        import os
+        from datetime import datetime
+
+        # Crear carpeta de salida si no existe
+        os.makedirs(carpeta, exist_ok=True)
+
+        # Fecha y hora actual en formato legible
+        fecha_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        nombre_archivo = f"historial_robot_{self.id}_{fecha_str}.csv"
+        ruta = os.path.join(carpeta, nombre_archivo)
+
+        # Definir columnas del CSV
+        columnas = [
+            "t",
+            "orientacion",
+            "energometro",
+            "roboscanner",
+            "monstroscopio",
+            "vacuscopio",
+            "posicion_anterior",
+            "accion"
+        ]
+
+        # Crear y escribir el archivo CSV
+        with open(ruta, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=columnas)
+            writer.writeheader()
+
+            for h in self.memoria.get("historial", []):
+                p = h.get("p", {})
+                writer.writerow({
+                    "t": h.get("t"),
+                    "orientacion": p.get("ori"),
+                    "energometro": p.get("E"),
+                    "roboscanner": p.get("R"),
+                    "monstroscopio": p.get("M"),
+                    "vacuscopio": p.get("V"),
+                    "posicion_anterior": p.get("pos_prev"),
+                    "accion": h.get("a")
+                })
+
+        print(f"🧾 Historial del Robot {self.id} exportado en: {ruta}")
+
     def __repr__(self) -> str:
         """Representación simplificada del robot."""
         return f"<AgenteRacionalRobot id={self.id} pos=({self.x},{self.y},{self.z}) ori={self.orientacion}>"
