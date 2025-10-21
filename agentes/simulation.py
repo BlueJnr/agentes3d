@@ -19,7 +19,10 @@ class SimulacionEnergetica:
             Nmonstruos: int = 2,
             ticks: int = 15,
             K_monstruo: int = 3,
-            seed: int | None = None
+            seed: int | None = None,
+            Pfree: float = 0.8,
+            Psoft: float = 0.2,
+            p_movimiento: float = 0.7
     ) -> None:
         """Inicializa el entorno y crea los agentes energéticos y materiales."""
         self.N = N
@@ -27,8 +30,12 @@ class SimulacionEnergetica:
         self.Nmonstruos = Nmonstruos
         self.ticks = ticks
         self.K_monstruo = K_monstruo
+        self.Pfree = Pfree
+        self.Psoft = Psoft
+        self.p_movimiento = p_movimiento
+        self.seed = seed
 
-        self.entorno = EntornoOperacion(N=N, Psoft=0.2, Pfree=0.8, seed=seed)
+        self.entorno = EntornoOperacion(N=N, Psoft=Psoft, Pfree=Pfree, seed=seed)
         self._inicializar_agentes()
 
     # -------------------------------------------------------------------------
@@ -46,7 +53,7 @@ class SimulacionEnergetica:
         for i in range(self.Nmonstruos):
             while True:
                 x, y, z = self._posicion_aleatoria()
-                monstruo = AgenteReflejoMonstruo(id=i + 1, x=x, y=y, z=z)
+                monstruo = AgenteReflejoMonstruo(id=i + 1, x=x, y=y, z=z, p_movimiento=self.p_movimiento)
                 if self.entorno.registrar_monstruo(monstruo):
                     break
 
@@ -114,7 +121,7 @@ class SimulacionEnergetica:
 
             # Si no quedan agentes activos, termina
             if not any(getattr(r, "activo", False) for r in self.entorno.robots) and \
-               not any(getattr(m, "activo", False) for m in self.entorno.monstruos):
+                    not any(getattr(m, "activo", False) for m in self.entorno.monstruos):
                 print("\n🏁 No quedan agentes activos. Fin anticipado de la simulación.")
                 break
 
