@@ -82,9 +82,9 @@ class SimulacionEnergetica:
             print(f"⚙️  [Ciclo Energético {t}]")
             print(f"{'-' * 60}")
 
-            # Monstruos reflejo
+            # Monstruos reflejo (solo activos)
             print("👾 MONSTRUOS REFLEJO:")
-            for monstruo in list(self.entorno.monstruos):
+            for monstruo in [m for m in self.entorno.monstruos if getattr(m, "activo", True)]:
                 evento = monstruo.percibir_decidir_actuar(t, self.entorno, self.K_monstruo)
                 accion = evento.get("accion", "N/A")
                 exito = evento.get("exito", False)
@@ -97,9 +97,9 @@ class SimulacionEnergetica:
                 else:
                     print(f"  💤 [Monstruo {monstruo.id}] Inactivo → {razon}")
 
-            # Robots racionales
+            # Robots racionales (solo activos)
             print("\n🤖 ROBOTS RACIONALES:")
-            for robot in list(self.entorno.robots):
+            for robot in [r for r in self.entorno.robots if getattr(r, "activo", True)]:
                 evento = robot.percibir_decidir_actuar(t, self.entorno)
                 accion = evento.get("accion", "?")
                 exito = evento.get("exito", False)
@@ -111,7 +111,12 @@ class SimulacionEnergetica:
 
                 if accion == "VACUUMATOR" and exito:
                     print(f"     💥 [Robot {robot.id}] se autodestruye tras activar Vacuumator.")
-                    break
+
+            # Si no quedan agentes activos, termina
+            if not any(getattr(r, "activo", False) for r in self.entorno.robots) and \
+               not any(getattr(m, "activo", False) for m in self.entorno.monstruos):
+                print("\n🏁 No quedan agentes activos. Fin anticipado de la simulación.")
+                break
 
             # Visualización
             print(f"\n🧩 Visualizando capa central (z={self.N // 2}) del entorno...")

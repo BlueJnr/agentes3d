@@ -7,7 +7,7 @@ if __name__ == "__main__":
         N=6,  # Tamaño del entorno cúbico (6³)
         Nrobots=2,  # Robots racionales
         Nmonstruos=2,  # Monstruos reflejo
-        ticks=10,  # Ciclos energéticos totales
+        ticks=150,  # Ciclos energéticos totales
         K_monstruo=3,  # Frecuencia de activación de monstruos
         seed=42  # Semilla para reproducibilidad
     )
