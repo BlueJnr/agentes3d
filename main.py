@@ -16,5 +16,5 @@ if __name__ == "__main__":
     )
 
     # Ejecución de la simulación
-    # simulacion.ejecutar(delay=0.2)
-    simulacion.ejecutar_manual_3d()
+    simulacion.ejecutar(delay=0.2)
+    #simulacion.ejecutar_manual_3d()

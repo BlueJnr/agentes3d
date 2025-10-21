@@ -96,26 +96,3 @@ class EntornoOperacion:
             if m.id == monstruo_id and m.activo:
                 m.activo = False
                 break
-
-    # -------------------------------------------------------------------------
-    # VISUALIZACIÓN
-    # -------------------------------------------------------------------------
-    def visualizar_capa(self, z: int) -> None:
-        """Imprime una capa bidimensional del entorno (Z fija)."""
-        if not (0 <= z < self.N):
-            print(f"Capa {z} fuera de rango.")
-            return
-
-        print(f"\n--- Capa Energética Z={z} ---")
-        for y in range(self.N):
-            fila = ""
-            for x in range(self.N):
-                if any((r.x, r.y, r.z) == (x, y, z) for r in self.robots):
-                    fila += "[R]"
-                elif any((m.x, m.y, m.z) == (x, y, z) for m in self.monstruos):
-                    fila += "[M]"
-                elif self.grid[x, y, z] == self.ZONA_VACIA:
-                    fila += "[#]"
-                else:
-                    fila += "[ ]"
-            print(fila)

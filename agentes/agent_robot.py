@@ -113,6 +113,9 @@ class AgenteRacionalRobot:
         self.memoria["vacuscopio_activado"] = False
         regla = self.tabla_mapeo.get(clave)
         if regla:
+            # MÉTRICA: registrar regla usada
+            if hasattr(self, "simulacion"):
+                self.simulacion.metricas["reglas_usadas"].add(id(regla))
             return {"accion": regla["accion"], "param": regla.get("param", percepcion["monstroscopio"][2]),
                     "razon": regla["razon"]}
         return {"accion": "PROPULSOR", "param": percepcion["monstroscopio"][2], "razon": "accion_por_defecto"}
@@ -135,16 +138,28 @@ class AgenteRacionalRobot:
         dx, dy, dz = _ORIENTACIONES[self.orientacion]
         nx, ny, nz = self.x + dx, self.y + dy, self.z + dz
         tipo = entorno.obtener_tipo_celda(nx, ny, nz)
+        # MÉTRICA
+        if hasattr(entorno, "simulacion"):
+            entorno.simulacion.metricas["acciones"]["avances"] += 1
         if tipo == entorno.ZONA_LIBRE:
             self.memoria['posicion_anterior'] = (self.x, self.y, self.z)
             self.x, self.y, self.z = nx, ny, nz
             self.memoria['vacuscopio_activado'] = False
             return {"accion": "PROPULSOR", "exito": True, "razon": "avance_exitoso"}
-        self.memoria['vacuscopio_activado'] = True
-        return {"accion": "PROPULSOR", "exito": False, "resultado": {"colision": True}, "razon": "colision_con_pared"}
+        else:
+            # MÉTRICA: colisión
+            if hasattr(entorno, "simulacion"):
+                entorno.simulacion.metricas["colisiones"] += 1
+                if not entorno.simulacion.metricas["primer_vacuumator"]:
+                    entorno.simulacion.metricas["colisiones_pre_primera_caza"] += 1
+            self.memoria['vacuscopio_activado'] = True
+            return {"accion": "PROPULSOR", "exito": False, "resultado": {"colision": True},
+                    "razon": "colision_con_pared"}
 
     def _reorientador(self, sentido: str = '+90') -> Dict[str, Any]:
         """Gira 90° o se alinea a una dirección específica."""
+        if hasattr(self, "simulacion"):
+            self.simulacion.metricas["acciones"]["rotaciones"] += 1  # MÉTRICA
         if sentido in _ORIENTACIONES:
             self.orientacion = sentido
             return {"accion": "REORIENTADOR", "exito": True, "razon": "alineacion_directa"}
@@ -162,6 +177,12 @@ class AgenteRacionalRobot:
             entorno.eliminar_monstruo(m.id)
         entorno.eliminar_robot(self.id)
         entorno.grid[self.x, self.y, self.z] = entorno.ZONA_VACIA
+        # MÉTRICA
+        if hasattr(entorno, "simulacion"):
+            entorno.simulacion.metricas["acciones"]["vacuumator"] += 1
+            entorno.simulacion.metricas["monstruos_destruidos"] += len(eliminados)
+            if len(eliminados) > 0:
+                entorno.simulacion.metricas["primer_vacuumator"] = True
         return {"accion": "VACUUMATOR", "exito": bool(eliminados), "razon": "autodestruccion_si_exitoso"}
 
     # -------------------------------------------------------------------------
@@ -178,7 +199,6 @@ class AgenteRacionalRobot:
         bucle = self.detectar_bucle()
         if bucle:
             longitud, repeticiones = bucle
-            print(f"⚠️ [Robot {self.id}] Bucle detectado ({longitud} pasos ×{repeticiones}).")
             if repeticiones >= 2:
                 self._evadir_bucle(entorno)
 
@@ -220,6 +240,8 @@ class AgenteRacionalRobot:
                 else:
                     break
             if repeticiones >= min_repeticiones:
+                if hasattr(self, "simulacion"):
+                    self.simulacion.metricas["bucles_detectados"] += 1  # MÉTRICA
                 return l, repeticiones
         return None
 
@@ -228,9 +250,7 @@ class AgenteRacionalRobot:
         opuestas = {"+X": "-X", "-X": "+X", "+Y": "-Y", "-Y": "+Y", "+Z": "-Z", "-Z": "+Z"}
         historial = self.memoria.get('historial', [])[-6:]
         ultimas_oris = [h["p"]["ori"] for h in historial if "p" in h and "ori" in h["p"]]
-        ultimas_pos = [h["p"]["pos_prev"] for h in historial if "p" in h and "pos_prev" in h["p"]]
-        if len(set(ultimas_pos)) <= 2:
-            print(f"🧩 [Robot {self.id}] Posición repetida → evasión.")
+
         orientaciones_filtradas = [
                                       o for o in _ORIENTACIONES.keys()
                                       if o not in (self.orientacion,
@@ -240,7 +260,6 @@ class AgenteRacionalRobot:
                                       if o not in (self.orientacion, opuestas.get(self.orientacion))
                                   ]
         nueva_dir = random.choice(orientaciones_filtradas)
-        print(f"🌀 [Robot {self.id}] Evasión: {self.orientacion} → {nueva_dir}")
         self._reorientador(nueva_dir)
         if random.random() < 0.4:
             self._propulsor(entorno)
